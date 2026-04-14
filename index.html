@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>单据排版工具</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --surface2: #e8eaed;
+    --border: #d1d5db;
+    --accent: #00a87a;
+    --accent-dim: rgba(0,168,122,0.1);
+    --blue: #2563eb;
+    --blue-dim: rgba(37,99,235,0.1);
+    --warn: #dc6027;
+    --text: #1a1d23;
+    --muted: #6b7280;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+    --purple: #7c3aed;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; padding: 20px 14px 80px; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(0,0,0,0.03) 1px,transparent 1px), linear-gradient(90deg,rgba(0,0,0,0.03) 1px,transparent 1px);
+    background-size: 48px 48px; pointer-events: none; z-index: 0;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+
+  .header { margin-bottom: 20px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 10px; color: var(--accent); letter-spacing: .15em; text-transform: uppercase; border: 1px solid rgba(0,168,122,.35); padding: 3px 10px; margin-bottom: 10px; background: var(--accent-dim); }
+  .badge::before { content: '◆'; font-size: 7px; }
+  h1 { font-family: var(--mono); font-size: clamp(18px,3.5vw,28px); font-weight: 600; letter-spacing: -.02em; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .desc { margin-top: 6px; color: var(--muted); font-size: 11px; font-family: var(--mono); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab { font-family: var(--mono); font-size: 11px; padding: 7px 16px; border: 1px solid var(--border); background: transparent; cursor: pointer; letter-spacing: .06em; text-transform: uppercase; transition: all .15s; color: var(--muted); }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tab:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+
+  /* Panel */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* API key section */
+  .api-section { background: var(--surface); border: 1px solid var(--border); padding: 12px 16px; margin-bottom: 12px; }
+  .api-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .api-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+  .api-input { flex: 1; min-width: 200px; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 10px; outline: none; }
+  .api-input:focus { border-color: var(--blue); }
+
+  /* Section */
+  .section { background: var(--surface); border: 1px solid var(--border); padding: 14px 16px; margin-bottom: 12px; }
+  .sec-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .sec-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 12px; line-height: 1.65; padding: 10px 12px; resize: vertical; outline: none; min-height: 120px; transition: border-color .2s; }
+  textarea:focus { border-color: var(--blue); }
+  textarea::placeholder { color: var(--muted); }
+
+  /* Upload area */
+  .upload-area { border: 2px dashed var(--border); padding: 20px; text-align: center; cursor: pointer; transition: border-color .2s; margin-bottom: 10px; }
+  .upload-area:hover { border-color: var(--accent); }
+  .upload-area.has-image { border-color: var(--accent); border-style: solid; }
+  .upload-area input { display: none; }
+  .upload-label { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .upload-preview { max-width: 100%; max-height: 200px; display: none; margin: 10px auto 0; }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; border: none; transition: opacity .15s, transform .1s; white-space: nowrap; }
+  .btn:active { transform: scale(.97); }
+  .btn-go { background: var(--accent); color: #fff; }
+  .btn-go:hover { opacity: .88; }
+  .btn-go:disabled { opacity: .4; cursor: not-allowed; }
+  .hbtn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 6px 12px; cursor: pointer; transition: color .15s, border-color .15s; white-space: nowrap; }
+  .hbtn:hover { color: var(--accent); border-color: var(--accent); }
+  .hbtn.blue:hover { color: var(--blue); border-color: var(--blue); }
+
+  /* Output */
+  .output-wrap { position: relative; }
+  .output { background: #1e1e2e; color: #cdd6f4; font-family: var(--mono); font-size: 13px; line-height: 1.7; padding: 14px 16px; min-height: 100px; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--border); }
+  .copy-btn { position: absolute; top: 8px; right: 8px; background: transparent; border: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.6); font-family: var(--mono); font-size: 10px; padding: 4px 10px; cursor: pointer; letter-spacing: .06em; text-transform: uppercase; transition: all .15s; }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Spinner */
+  .spinner { display: none; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 22px; right: 18px; background: var(--text); border: 1px solid var(--border); padding: 9px 16px; font-family: var(--mono); font-size: 12px; color: #fff; z-index: 999; opacity: 0; transform: translateY(8px); transition: all .25s; pointer-events: none; max-width: 260px; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Loading overlay */
+  .loading-msg { font-family: var(--mono); font-size: 12px; color: var(--muted); padding: 8px 0; display: none; }
+
+  /* ABC format special */
+  .abc-note { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="header">
+  <div class="badge">单据排版系统</div>
+  <h1>单据 <em>排版工具</em></h1>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录</p>
+</div>
+
+<!-- API Key (only shown for Format 1) -->
+<div class="api-section" id="apiSection">
+  <div class="api-row">
+    <span class="api-label">Claude API Key</span>
+    <input class="api-input" type="password" id="apiKey" placeholder="sk-ant-..." />
+    <button class="hbtn" onclick="testAPI()">测试</button>
+    <button class="hbtn" onclick="toggleApiVis()">显示</button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab(0)">① 文字提取</button>
+  <button class="tab" onclick="switchTab(1)">② 排版助手</button>
+  <button class="tab" onclick="switchTab(2)">③ 查理斯</button>
+  <button class="tab" onclick="switchTab(3)">④ ABC</button>
+</div>
+
+<!-- ══ Panel 0: 文字提取 (OCR) ══ -->
+<div class="panel active" id="panel0">
+  <div class="section">
+    <div class="sec-label">上传单据图片</div>
+    <div class="upload-area" id="uploadArea" onclick="document.getElementById('imgInput').click()">
+      <input type="file" id="imgInput" accept="image/*" onchange="onImageSelected(event)">
+      <div class="upload-label" id="uploadLabel">📷 点击上传图片 或 长按粘贴</div>
+      <img id="uploadPreview" class="upload-preview" alt="预览">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-go" onclick="runOCR()" id="ocrBtn">
+        <span class="spinner" id="ocrSpinner"></span>
+        ▶ 开始识别
+      </button>
+      <button class="hbtn" onclick="clearPanel0()">✕ 清空</button>
+    </div>
+    <div class="loading-msg" id="ocrLoading">正在识别中，请稍候...</div>
+  </div>
+  <div class="section">
+    <div class="sec-label">识别结果</div>
+    <div class="output-wrap">
+      <div class="output" id="output0">—</div>
+      <button class="copy-btn" onclick="copyOutput(0)">复制</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Panel 1: 排版助手 ══ -->
+<div class="panel" id="panel1">
+  <div class="section">
+    <div class="sec-label">输入文本</div>
+    <textarea id="input1" placeholder="粘贴文本，例如：9891,9198,2256,1421...rm3A2 或 8177-1 7718-1 5397-1...mkt"></textarea>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-go" onclick="runFormat1()">▶ 转换</button>
+      <button class="hbtn" onclick="document.getElementById('input1').value=''">✕ 清空</button>
+      <button class="hbtn blue" onclick="pasteTo('input1')">📋 粘贴</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="sec-label">输出结果</div>
+    <div class="output-wrap">
+      <div class="output" id="output1">—</div>
+      <button class="copy-btn" onclick="copyOutput(1)">复制</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Panel 2: 查理斯 ══ -->
+<div class="panel" id="panel2">
+  <div class="section">
+    <div class="sec-label">输入文本</div>
+    <textarea id="input2" placeholder="粘贴 Charles 的 WhatsApp 消息..." style="min-height:160px"></textarea>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-go" onclick="runFormat2()">▶ 转换</button>
+      <button class="hbtn" onclick="document.getElementById('input2').value=''">✕ 清空</button>
+      <button class="hbtn blue" onclick="pasteTo('input2')">📋 粘贴</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="sec-label">输出结果</div>
+    <div class="output-wrap">
+      <div class="output" id="output2">—</div>
+      <button class="copy-btn" onclick="copyOutput(2)">复制</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Panel 3: ABC ══ -->
+<div class="panel" id="panel3">
+  <div class="section">
+    <div class="sec-label">输入文本</div>
+    <textarea id="input3" placeholder="粘贴单据内容，例如：9466=2B 3S..." style="min-height:160px"></textarea>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-go" onclick="runFormat3()">▶ 转换</button>
+      <button class="hbtn" onclick="document.getElementById('input3').value=''">✕ 清空</button>
+      <button class="hbtn blue" onclick="pasteTo('input3')">📋 粘贴</button>
+    </div>
+    <div class="abc-note">B → D1+E1 (÷2)　　S → A1+B1+C1 (÷3)　　混合 → 按 A1→B1→C1→D1→E1</div>
+  </div>
+  <div class="section">
+    <div class="sec-label">输出结果</div>
+    <div class="output-wrap">
+      <div class="output" id="output3">—</div>
+      <button class="copy-btn" onclick="copyOutput(3)">复制</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- end wrap -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════
+// TABS
+// ════════════════════════════════
+function switchTab(i) {
+  document.querySelectorAll('.tab').forEach((t,j) => t.classList.toggle('active', i===j));
+  document.querySelectorAll('.panel').forEach((p,j) => p.classList.toggle('active', i===j));
+  document.getElementById('apiSection').style.display = i===0 ? 'block' : 'none';
+}
+
+// ════════════════════════════════
+// API KEY
+// ════════════════════════════════
+function getKey() { return document.getElementById('apiKey').value.trim(); }
+
+function toggleApiVis() {
+  const el = document.getElementById('apiKey');
+  const btn = event.target;
+  if (el.type === 'password') { el.type = 'text'; btn.textContent = '隐藏'; }
+  else { el.type = 'password'; btn.textContent = '显示'; }
+}
+
+async function testAPI() {
+  const key = getKey();
+  if (!key) { showToast('请先输入 API Key'); return; }
+  showToast('测试中...');
+  try {
+    const res = await callClaude(key, 'Say "OK" only.', null);
+    showToast('API Key 有效 ✓');
+  } catch(e) {
+    showToast('API Key 无效: ' + e.message);
+  }
+}
+
+// ════════════════════════════════
+// CLAUDE API CALL
+// ════════════════════════════════
+async function callClaude(key, prompt, imageBase64) {
+  const content = [];
+  if (imageBase64) {
+    content.push({ type: 'image', source: { type: 'base64', media_type: imageBase64.type, data: imageBase64.data } });
+  }
+  content.push({ type: 'text', text: prompt });
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2048,
+      messages: [{ role: 'user', content }]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    throw new Error(err.error?.message || res.statusText);
+  }
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+// ════════════════════════════════
+// FORMAT 0 — OCR 文字提取
+// ════════════════════════════════
+let selectedImage = null;
+
+function onImageSelected(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const dataURL = ev.target.result;
+    const base64 = dataURL.split(',')[1];
+    const type = file.type;
+    selectedImage = { data: base64, type };
+    document.getElementById('uploadPreview').src = dataURL;
+    document.getElementById('uploadPreview').style.display = 'block';
+    document.getElementById('uploadLabel').textContent = '✓ ' + file.name;
+    document.getElementById('uploadArea').classList.add('has-image');
+  };
+  reader.readAsDataURL(file);
+}
+
+async function runOCR() {
+  if (!selectedImage) { showToast('请先上传图片'); return; }
+  const key = getKey();
+  if (!key) { showToast('请先输入 Claude API Key'); return; }
+
+  const btn = document.getElementById('ocrBtn');
+  const spinner = document.getElementById('ocrSpinner');
+  const loading = document.getElementById('ocrLoading');
+  btn.disabled = true;
+  spinner.style.display = 'inline-block';
+  loading.style.display = 'block';
+  document.getElementById('output0').textContent = '识别中...';
+
+  const prompt = `你是一款专注于彩票单据文本提取的工具型智能体，核心能力是精准提取彩票单据中的手写/印刷文本内容。执行规则如下：
+
+1. 提取时严格保留原始字符（数字、字母、符号、空格、换行），不增删、不修改任何内容；
+2. 默认按原始排版输出提取结果；
+3. 若未识别到有效文本，回复「未识别到有效彩票文本，请检查单据内容是否清晰～」
+4. 文本格式转换规则：将原始内容中的「·」「-」（连接数字/符号的分隔符）统一替换为「#」；若原始内容中存在「-BOX」或「BOX」标识，则整行以「*」前缀呈现（即「内容-BOX」转换为「*内容」）。
+5. 将提取的彩票号码按原始字符顺序，以每个号码单独占一行的形式呈现，且不添加任何序号、标识或额外符号，仅保留号码本身内容。
+6. 内容拆分与整合规则：
+   - 若单据内容呈现多列/多部分排版，自动按视觉分区拆分；
+   - 所有拆分后的内容整合到同一输出中，各部分之间以单个空行分隔，不标注"第一部分/第二部分"等标识；
+   - 需默认执行分隔符替换规则（将"-"和"·"转换为"#"）；
+   - 拆分后需保留各部分原始内容的顺序与字符，不增删修改。
+
+完成任务后不要向我提任何建议，不要添加任何解释或说明。`;
+
+  try {
+    const result = await callClaude(key, prompt, selectedImage);
+    document.getElementById('output0').textContent = result;
+  } catch(e) {
+    document.getElementById('output0').textContent = '识别失败: ' + e.message;
+    showToast('识别失败: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    loading.style.display = 'none';
+  }
+}
+
+function clearPanel0() {
+  selectedImage = null;
+  document.getElementById('imgInput').value = '';
+  document.getElementById('uploadPreview').style.display = 'none';
+  document.getElementById('uploadPreview').src = '';
+  document.getElementById('uploadLabel').textContent = '📷 点击上传图片 或 长按粘贴';
+  document.getElementById('uploadArea').classList.remove('has-image');
+  document.getElementById('output0').textContent = '—';
+}
+
+// ════════════════════════════════
+// FORMAT 1 — 排版助手
+// ════════════════════════════════
+
+// Letter to position mapping (民间习惯: k=2, p=2)
+const LETTER_MAP = { m:1, k:2, t:3, s:4, b:5, w:7, p:2 };
+
+function getCompanyCode(text) {
+  // Extract letter codes in order of appearance for company header
+  const upper = text.toUpperCase();
+  const letters = [];
+  for (const ch of upper) {
+    if (LETTER_MAP[ch.toLowerCase()] !== undefined && !letters.includes(ch.toLowerCase())) {
+      letters.push(ch.toLowerCase());
+    }
+  }
+  return letters.map(l => LETTER_MAP[l]).join('');
+}
+
+function parseInvestment(text) {
+  // Parse investment notation like rm3A2, 3B2S, 1B1.5S, etc.
+  // Returns {big, small, a1} values
+  let big = 0, small = 0, a1 = 0;
+
+  // Strip currency prefix like rm, RM
+  let t = text.replace(/^rm/i, '').trim();
+
+  // Pattern: number followed by B/S/A1
+  // e.g. 3A2 => big=3, a1=2 (no S mentioned)
+  // e.g. 2B3S => big=2, small=3
+  // e.g. 3B2A1 => big=3, a1=2
+
+  // Try: NB NS pattern
+  const bMatch = t.match(/(\d+(?:\.\d+)?)B/i);
+  const sMatch = t.match(/(\d+(?:\.\d+)?)S/i);
+  const aMatch = t.match(/(\d+(?:\.\d+)?)A(?:1)?(?!\d)/i);
+
+  if (bMatch) big = parseFloat(bMatch[1]);
+  if (sMatch) small = parseFloat(sMatch[1]);
+  if (aMatch) a1 = parseFloat(aMatch[1]);
+
+  // Pattern like 3A2 (no B/S) => Big=3, A1=2
+  if (!bMatch && !sMatch && !aMatch) {
+    const plain = t.match(/^(\d+(?:\.\d+)?)A(\d+(?:\.\d+)?)$/i);
+    if (plain) { big = parseFloat(plain[1]); a1 = parseFloat(plain[2]); }
+  }
+
+  return { big, small, a1 };
+}
+
+function formatInvestment(big, small, a1) {
+  // Returns #B#S#A1 string (skip zeros except when needed)
+  const parts = [];
+  if (big > 0 || small > 0 || a1 > 0) {
+    parts.push('#' + fmt(big));
+    parts.push('#' + fmt(small));
+    parts.push('#' + fmt(a1));
+  }
+  return parts.join('');
+}
+
+function fmt(n) {
+  if (n === 0) return '0';
+  return n % 1 === 0 ? String(n) : n.toFixed(1);
+}
+
+function runFormat1() {
+  const raw = document.getElementById('input1').value.trim();
+  if (!raw) { showToast('请先输入文本'); return; }
+
+  const result = processFormat1(raw);
+  document.getElementById('output1').textContent = result;
+}
+
+function processFormat1(raw) {
+  // Detect if 全保 mode
+  const isQuanBao = /全保/i.test(raw) || /\*\*/.test(raw);
+
+  // Split by comma or space to get tokens
+  // Normalize: replace Chinese commas, ellipsis
+  let text = raw.replace(/，/g, ',').replace(/…/g, ' ').replace(/\.\.\./g, ' ');
+
+  // Extract company code letters — find letter-only tokens
+  // Look for tokens that are purely letters (company codes like mkt, mtks, LN, etc.)
+  const tokens = text.split(/[\s,]+/).filter(Boolean);
+
+  // Find company code token (letters only, no digits, not currency prefixes)
+  // Also handle investment amount tokens like rm3A2
+  let companyLetters = '';
+  let investmentToken = '';
+  const skipPatterns = /^(rm|sgd)$/i;
+
+  for (const tok of tokens) {
+    if (/^[a-zA-Z]+$/.test(tok) && !skipPatterns.test(tok)) {
+      // Pure letters — could be company code
+      companyLetters = tok;
+    } else if (/^(rm|sgd)?[\d.]+[bsa]\d*/i.test(tok) || /^[\d.]+[bsa]/i.test(tok)) {
+      investmentToken = tok;
+    } else if (/^rm\d/i.test(tok)) {
+      investmentToken = tok;
+    }
+  }
+
+  // Build company header line
+  let companyHeader = '#';
+  if (companyLetters) {
+    const letters = companyLetters.toLowerCase().split('');
+    for (const l of letters) {
+      if (LETTER_MAP[l] !== undefined) companyHeader += LETTER_MAP[l];
+    }
+  }
+
+  // Parse investment
+  let investSuffix = '';
+  if (investmentToken) {
+    const { big, small, a1 } = parseInvestment(investmentToken);
+    investSuffix = formatInvestment(big, small, a1);
+  } else {
+    // Try to find investment embedded in text like "全保 $6 MK"
+    const dollarMatch = raw.match(/\$(\d+(?:\.\d+)?)/);
+    if (dollarMatch) {
+      const amt = parseFloat(dollarMatch[1]);
+      // 全保 with dollar amount — big only? Check context
+      investSuffix = '#' + fmt(amt);
+    }
+  }
+
+  // Extract 4-digit number lines
+  // Find all tokens that are 4-digit numbers possibly with trailing -N or #N
+  const lines = [];
+  let firstLine = true;
+
+  for (const tok of tokens) {
+    // Skip pure letter tokens and investment tokens and currency
+    if (/^[a-zA-Z]+$/.test(tok)) continue;
+    if (/^(rm|\$)/i.test(tok) && !/\d{4}/.test(tok)) continue;
+
+    // Match: 4digits optionally followed by -N or #N repeated
+    const numMatch = tok.match(/^(\d{4})((?:[#-]\d+)*)(-?)$/);
+    if (numMatch) {
+      const num = numMatch[1];
+      let suffix = numMatch[2].replace(/-/g, '#');
+      // trailing dash with no digit after — strip it
+      // suffix already handled above
+
+      let line = '';
+      if (isQuanBao) {
+        if (firstLine) {
+          // First number gets the amount
+          line = '**' + num + investSuffix;
+          firstLine = false;
+        } else {
+          line = '**' + num + suffix;
+        }
+      } else {
+        if (firstLine && companyHeader !== '#') {
+          firstLine = false;
+        }
+        line = num + suffix;
+        // If no explicit suffix on this token but we have investSuffix and it's the pattern
+        // where all numbers share the same investment, append it
+        // (handled by trailing -N in original text)
+      }
+      lines.push(line);
+    }
+  }
+
+  return companyHeader + '\n' + lines.join('\n');
+}
+
+// ════════════════════════════════
+// FORMAT 2 — 查理斯
+// ════════════════════════════════
+function runFormat2() {
+  const raw = document.getElementById('input2').value.trim();
+  if (!raw) { showToast('请先输入文本'); return; }
+
+  const result = processCharles(raw);
+  document.getElementById('output2').textContent = result;
+}
+
+function processCharles(raw) {
+  // Strip WhatsApp timestamps: [4/14, 6:54 PM] Name: or [dd/mm, hh:mm] Name:
+  const stripWA = line => line.replace(/^\[\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}(?:\s*[AP]M)?\]\s*[^:]+:\s*/i, '').trim();
+
+  const lines = raw.split('\n');
+  const sections = []; // [{company, lines:[]}]
+  let curCompany = null;
+  let curLines = [];
+
+  for (const rawLine of lines) {
+    const line = stripWA(rawLine).trim();
+    if (!line) continue;
+
+    // Detect company line: L, N, LN, Ln (only letters, possibly with = or # decorations stripped)
+    // Company triggers: line is just L, N, LN, Ln (case insensitive), possibly with surrounding symbols
+    const companyMatch = line.match(/^[^0-9*]*\b(LN|Ln|NL|L|N)\b[^0-9]*$/i);
+    if (companyMatch) {
+      if (curLines.length) sections.push({ company: curCompany, lines: curLines });
+      const code = companyMatch[1].toUpperCase();
+      if (code === 'LN' || code === 'NL') curCompany = '#98';
+      else if (code === 'L') curCompany = '#9';
+      else curCompany = '#8';
+      curLines = [];
+      continue;
+    }
+
+    // Skip pure header/meta lines (TT header, date lines, etc.)
+    if (/^\(TT\)$/i.test(line)) continue;
+    if (/^\d{6}\s+\d{4}\s+\(\d+\)$/.test(line)) continue; // receipt header
+    if (/^\(\d+\)$/.test(line)) continue;
+    if (/^\d{2}\/\d{2}$/.test(line)) continue; // date like 12/04
+    if (/^\*LN$/i.test(line) || /^\*L$/i.test(line) || /^\*N$/i.test(line)) {
+      // *LN style company marker
+      const code = line.replace('*','').toUpperCase();
+      if (curLines.length) sections.push({ company: curCompany, lines: curLines });
+      if (code === 'LN') curCompany = '#98';
+      else if (code === 'L') curCompany = '#9';
+      else curCompany = '#8';
+      curLines = [];
+      continue;
+    }
+    if (/^[A-Za-z]{1,4}$/.test(line) && !/^(bbox|box|ibox|HE)$/i.test(line)) {
+      // Single letter section markers like "L" already handled above
+      continue;
+    }
+
+    // Parse bet line
+    // Formats: "2200 1", "2224 1 b box", "4747 1 bbox", "4700 2"
+    // Also: "5803=4B", "7979=1B (Box)", "5803=5B (IBox)"
+    // Also: "5999 1b box", "15041" (no space)
+
+    // Try format: XXXX=NB [(IBox|Box)]
+    let m = line.match(/^(\d{4})=(\d+(?:\.\d+)?)B?\s*(\(IBox\)|\(Box\)|ibox|bbox|b\s*box)?/i);
+    if (m) {
+      const num = m[1];
+      const amt = m[2];
+      const boxType = (m[3]||'').toLowerCase().replace(/\s/,'');
+      let prefix = '';
+      if (boxType === '(ibox)' || boxType === 'ibox') prefix = '**';
+      else if (boxType === '(box)' || boxType === 'bbox' || boxType === 'bbox') prefix = '*';
+      curLines.push(prefix + num + '#' + amt);
+      continue;
+    }
+
+    // Try format: XXXX N [b box | bbox | (Box)] — space separated, or XXXXN (no space, last digit is amount)
+    // Handle "15041" as 1504 + 1
+    m = line.match(/^(\d{4})\s*(\d+(?:\.\d+)?)\s*(b\s*box|bbox|\(box\)|\(ibox\)|ibox)?/i);
+    if (m) {
+      const num = m[1];
+      const amt = m[2];
+      const boxRaw = (m[3]||'').toLowerCase().replace(/\s/,'');
+      let prefix = '';
+      if (boxRaw === '(ibox)' || boxRaw === 'ibox') prefix = '**';
+      else if (boxRaw === 'bbox' || boxRaw === '(box)' || boxRaw === 'b box' || boxRaw === 'bbox') prefix = '*';
+      curLines.push(prefix + num + '#' + amt);
+      continue;
+    }
+
+    // 5-digit run-on like "25151" → 2515 + 1, "72091" → 7209 + 1
+    m = line.match(/^(\d{4})(\d)$/);
+    if (m) {
+      curLines.push(m[1] + '#' + m[2]);
+      continue;
+    }
+  }
+
+  if (curLines.length) sections.push({ company: curCompany, lines: curLines });
+
+  // Build output
+  const out = [];
+  for (const sec of sections) {
+    if (sec.company) out.push(sec.company);
+    out.push(...sec.lines);
+  }
+
+  return out.join('\n');
+}
+
+// ════════════════════════════════
+// FORMAT 3 — ABC
+// ════════════════════════════════
+function runFormat3() {
+  const raw = document.getElementById('input3').value.trim();
+  if (!raw) { showToast('请先输入文本'); return; }
+
+  const result = processABC(raw);
+  document.getElementById('output3').textContent = result;
+}
+
+function processABC(raw) {
+  const lines = raw.split('\n');
+  const out = [];
+  let pastGT = false;
+
+  // Header cleanup: convert "260414 1855 (61483)" → "26.04.14 1855" + "(61483)"
+  // Remove (COPY)
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // Remove (COPY)
+    if (/^\(COPY\)$/i.test(line)) continue;
+
+    // Once GT is found, copy everything as-is
+    if (/^GT\s*=/.test(line)) pastGT = true;
+    if (pastGT) { out.push(line); continue; }
+
+    // Header: "260414 1855 (61483)" → "26.04.14 1855" then "(61483)" on next line
+    const hdrMatch = line.match(/^(\d{2})(\d{2})(\d{2})\s+(\d{4})\s+\((\d+)\)$/);
+    if (hdrMatch) {
+      out.push(`${hdrMatch[1]}.${hdrMatch[2]}.${hdrMatch[3]} ${hdrMatch[4]}`);
+      out.push(`(${hdrMatch[5]})`);
+      continue;
+    }
+
+    // Bet line: "XXXX=NB [NS] [(IBox|Box)]"
+    // Pattern: 4digits = amounts + optional box
+    const betMatch = line.match(/^(\d{4})\s*=\s*(.+)$/);
+    if (betMatch) {
+      const num = betMatch[1];
+      const rest = betMatch[2];
+
+      // Extract box type
+      let boxSuffix = '';
+      const iboxMatch = rest.match(/\(IBox\)/i);
+      const boxMatch = rest.match(/\(Box\)/i);
+      if (iboxMatch) boxSuffix = ' (IBox)';
+      else if (boxMatch) boxSuffix = ' (Box)';
+
+      // Extract B and S amounts
+      const bM = rest.match(/(\d+(?:\.\d+)?)\s*B(?!ox)/i);
+      const sM = rest.match(/(\d+(?:\.\d+)?)\s*S(?!A)/i);
+      const bigAmt  = bM ? parseFloat(bM[1]) : 0;
+      const smlAmt  = sM ? parseFloat(sM[1]) : 0;
+
+      // Calculate positions
+      // B → D1, E1 (÷2 each)
+      // S → A1, B1, C1 (÷3 each)
+      const dVal = bigAmt > 0 ? bigAmt / 2 : 0;
+      const aVal = smlAmt > 0 ? smlAmt / 3 : 0;
+
+      const parts = [];
+      if (aVal > 0) parts.push(`${fmtABC(aVal)}A1`, `${fmtABC(aVal)}B1`, `${fmtABC(aVal)}C1`);
+      if (dVal > 0) parts.push(`${fmtABC(dVal)}D1`, `${fmtABC(dVal)}E1`);
+
+      out.push(`${num}=${parts.join(' ')}${boxSuffix}`);
+      continue;
+    }
+
+    // Everything else — output as-is
+    out.push(line);
+  }
+
+  return out.join('\n');
+}
+
+function fmtABC(n) {
+  if (n % 1 === 0) return String(n);
+  // Only show .5, round to 1 decimal
+  return n.toFixed(1);
+}
+
+// ════════════════════════════════
+// UTILS
+// ════════════════════════════════
+function copyOutput(i) {
+  const text = document.getElementById('output' + i).textContent;
+  if (!text || text === '—') { showToast('没有内容可复制'); return; }
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => showToast('已复制！')).catch(() => fallbackCopy(text));
+  } else fallbackCopy(text);
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); showToast('已复制！'); } catch { showToast('复制失败'); }
+  document.body.removeChild(ta);
+}
+
+async function pasteTo(id) {
+  try {
+    const text = await navigator.clipboard.readText();
+    document.getElementById(id).value = text;
+    showToast('已粘贴！');
+  } catch(e) {
+    showToast('请直接长按输入框粘贴');
+  }
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
