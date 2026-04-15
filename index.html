@@ -119,10 +119,11 @@
 <div class="api-section" id="apiSection">
   <div class="api-row">
     <span class="api-label">Claude API Key</span>
-    <input class="api-input" type="password" id="apiKey" placeholder="sk-ant-..." />
+    <input class="api-input" type="password" id="apiKey" placeholder="sk-ant-..." oninput="saveApiKey()" />
     <button class="hbtn" onclick="testAPI()">测试</button>
     <button class="hbtn" onclick="toggleApiVis()">显示</button>
   </div>
+  <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px">API Key 已自动保存到本机，下次无需重新输入</div>
 </div>
 
 <!-- Tabs -->
@@ -240,6 +241,16 @@ function switchTab(i) {
 // ════════════════════════════════
 function getKey() { return document.getElementById('apiKey').value.trim(); }
 
+function saveApiKey() {
+  const key = getKey();
+  if (key) localStorage.setItem('claude_api_key', key);
+}
+
+function loadApiKey() {
+  const saved = localStorage.getItem('claude_api_key');
+  if (saved) document.getElementById('apiKey').value = saved;
+}
+
 function toggleApiVis() {
   const el = document.getElementById('apiKey');
   const btn = event.target;
@@ -326,20 +337,24 @@ async function runOCR() {
   loading.style.display = 'block';
   document.getElementById('output0').textContent = '识别中...';
 
-  const prompt = `你是一款专注于彩票单据文本提取的工具型智能体，核心能力是精准提取彩票单据中的手写/印刷文本内容。执行规则如下：
+  const prompt = `You are an OCR extraction engine for lottery ticket images.
 
-1. 提取时严格保留原始字符（数字、字母、符号、空格、换行），不增删、不修改任何内容；
-2. 默认按原始排版输出提取结果；
-3. 若未识别到有效文本，回复「未识别到有效彩票文本，请检查单据内容是否清晰～」
-4. 文本格式转换规则：将原始内容中的「·」「-」（连接数字/符号的分隔符）统一替换为「#」；若原始内容中存在「-BOX」或「BOX」标识，则整行以「*」前缀呈现（即「内容-BOX」转换为「*内容」）。
-5. 将提取的彩票号码按原始字符顺序，以每个号码单独占一行的形式呈现，且不添加任何序号、标识或额外符号，仅保留号码本身内容。
-6. 内容拆分与整合规则：
-   - 若单据内容呈现多列/多部分排版，自动按视觉分区拆分；
-   - 所有拆分后的内容整合到同一输出中，各部分之间以单个空行分隔，不标注"第一部分/第二部分"等标识；
-   - 需默认执行分隔符替换规则（将"-"和"·"转换为"#"）；
-   - 拆分后需保留各部分原始内容的顺序与字符，不增删修改。
+STRICT RULES:
+1. Extract ALL text exactly as shown. Do NOT explain, analyze, or add any extra words.
+2. Each lottery number is exactly 4 digits. Read each digit carefully one by one.
+3. Common handwriting confusion to watch for:
+   - 0 (zero) vs 6: zero is fully closed circle, 6 has a tail at top
+   - 1 vs 7: 1 is straight, 7 has a horizontal bar at top
+   - 3 vs 8: 3 is open on left, 8 is fully closed
+   - 2 vs 7: different top shape
+   - 9 vs 4: 9 has closed loop, 4 has open angle
+4. Replace「·」or「-」(digit separators) with「#」
+5. If a line contains BOX or bbox or b box → add * prefix to that line
+6. Output each number on its own line. No numbering, no labels, no extra text.
+7. If multiple columns exist, output each column separated by a blank line.
+8. Do NOT suggest anything after finishing.
 
-完成任务后不要向我提任何建议，不要添加任何解释或说明。`;
+ONLY output the final extracted text.`;
 
   try {
     const result = await callClaude(key, prompt, selectedImage);
@@ -439,26 +454,21 @@ function runFormat1() {
 }
 
 function processFormat1(raw) {
-  // Detect if 全保 mode
   const isQuanBao = /全保/i.test(raw) || /\*\*/.test(raw);
 
-  // Split by comma or space to get tokens
-  // Normalize: replace Chinese commas, ellipsis
+  // Normalize separators and commas
   let text = raw.replace(/，/g, ',').replace(/…/g, ' ').replace(/\.\.\./g, ' ');
 
-  // Extract company code letters — find letter-only tokens
-  // Look for tokens that are purely letters (company codes like mkt, mtks, LN, etc.)
+  // Split into space/comma-separated tokens
   const tokens = text.split(/[\s,]+/).filter(Boolean);
 
-  // Find company code token (letters only, no digits, not currency prefixes)
-  // Also handle investment amount tokens like rm3A2
+  // Find company code letters and investment token
   let companyLetters = '';
   let investmentToken = '';
   const skipPatterns = /^(rm|sgd)$/i;
 
   for (const tok of tokens) {
     if (/^[a-zA-Z]+$/.test(tok) && !skipPatterns.test(tok)) {
-      // Pure letters — could be company code
       companyLetters = tok;
     } else if (/^(rm|sgd)?[\d.]+[bsa]\d*/i.test(tok) || /^[\d.]+[bsa]/i.test(tok)) {
       investmentToken = tok;
@@ -467,67 +477,57 @@ function processFormat1(raw) {
     }
   }
 
-  // Build company header line
+  // Build company header
   let companyHeader = '#';
   if (companyLetters) {
-    const letters = companyLetters.toLowerCase().split('');
-    for (const l of letters) {
+    for (const l of companyLetters.toLowerCase()) {
       if (LETTER_MAP[l] !== undefined) companyHeader += LETTER_MAP[l];
     }
   }
 
-  // Parse investment
+  // Parse investment suffix
   let investSuffix = '';
   if (investmentToken) {
     const { big, small, a1 } = parseInvestment(investmentToken);
     investSuffix = formatInvestment(big, small, a1);
   } else {
-    // Try to find investment embedded in text like "全保 $6 MK"
     const dollarMatch = raw.match(/\$(\d+(?:\.\d+)?)/);
-    if (dollarMatch) {
-      const amt = parseFloat(dollarMatch[1]);
-      // 全保 with dollar amount — big only? Check context
-      investSuffix = '#' + fmt(amt);
-    }
+    if (dollarMatch) investSuffix = '#' + fmt(parseFloat(dollarMatch[1]));
   }
 
-  // Extract 4-digit number lines
-  // Find all tokens that are 4-digit numbers possibly with trailing -N or #N
-  const lines = [];
-  let firstLine = true;
-
+  // Collect all 4-digit numbers
+  // Numbers can be in tokens as standalone "1128" or dash-separated "1128-4602-7718"
+  const nums = [];
   for (const tok of tokens) {
-    // Skip pure letter tokens and investment tokens and currency
     if (/^[a-zA-Z]+$/.test(tok)) continue;
     if (/^(rm|\$)/i.test(tok) && !/\d{4}/.test(tok)) continue;
 
-    // Match: 4digits optionally followed by -N or #N repeated
-    const numMatch = tok.match(/^(\d{4})((?:[#-]\d+)*)(-?)$/);
-    if (numMatch) {
-      const num = numMatch[1];
-      let suffix = numMatch[2].replace(/-/g, '#');
-      // trailing dash with no digit after — strip it
-      // suffix already handled above
+    // Dash-separated chain: "1128-4602-7718-6764-5651-7071"
+    // Each segment is a 4-digit number; the dash is just a separator (no amount attached)
+    if (/^\d{4}(-\d{4})+$/.test(tok)) {
+      const parts = tok.split('-');
+      for (const p of parts) nums.push({ num: p, suffix: '' });
+      continue;
+    }
 
-      let line = '';
-      if (isQuanBao) {
-        if (firstLine) {
-          // First number gets the amount
-          line = '**' + num + investSuffix;
-          firstLine = false;
-        } else {
-          line = '**' + num + suffix;
-        }
-      } else {
-        if (firstLine && companyHeader !== '#') {
-          firstLine = false;
-        }
-        line = num + suffix;
-        // If no explicit suffix on this token but we have investSuffix and it's the pattern
-        // where all numbers share the same investment, append it
-        // (handled by trailing -N in original text)
-      }
-      lines.push(line);
+    // Single 4-digit with optional amount suffix: "8177-1" → num=8177, suffix=#1
+    const m = tok.match(/^(\d{4})((?:[#-]\d+)*)(-?)$/);
+    if (m) {
+      const suffix = m[2].replace(/-/g, '#');
+      nums.push({ num: m[1], suffix });
+    }
+  }
+
+  // Build output lines
+  const lines = [];
+  for (let i = 0; i < nums.length; i++) {
+    const { num, suffix } = nums[i];
+    if (isQuanBao) {
+      // All numbers get ** prefix; first one also gets the amount, rest get it too if no own suffix
+      lines.push('**' + num + investSuffix);
+    } else {
+      // Use own suffix if present, otherwise append investSuffix
+      lines.push(num + (suffix || investSuffix));
     }
   }
 
@@ -761,6 +761,9 @@ function showToast(msg) {
   el.textContent = msg; el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 3000);
 }
+
+// Init
+loadApiKey();
 </script>
 </body>
 </html>
