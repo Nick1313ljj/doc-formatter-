@@ -138,9 +138,14 @@
 <div class="panel active" id="panel0">
   <div class="section">
     <div class="sec-label">上传单据图片</div>
-    <div class="upload-area" id="uploadArea" onclick="document.getElementById('imgInput').click()">
-      <input type="file" id="imgInput" accept="image/*" onchange="onImageSelected(event)">
-      <div class="upload-label" id="uploadLabel">📷 点击上传图片 或 长按粘贴</div>
+    <div class="btn-row" style="margin-bottom:10px">
+      <button class="btn btn-go" style="background:var(--blue)" onclick="document.getElementById('imgCamera').click()">📷 拍照</button>
+      <button class="hbtn" onclick="document.getElementById('imgInput').click()">🖼 从相册选择</button>
+    </div>
+    <input type="file" id="imgCamera" accept="image/*" capture="environment" onchange="onImageSelected(event)" style="display:none">
+    <input type="file" id="imgInput" accept="image/*" onchange="onImageSelected(event)" style="display:none">
+    <div class="upload-area" id="uploadArea" style="cursor:default">
+      <div class="upload-label" id="uploadLabel">尚未选择图片</div>
       <img id="uploadPreview" class="upload-preview" alt="预览">
     </div>
     <div class="btn-row">
