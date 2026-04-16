@@ -588,34 +588,27 @@ function processCharles(raw) {
     const line = stripWA(rawLine).trim();
     if (!line) continue;
 
-    // Detect company line: L, N, LN, Ln (only letters, possibly with = or # decorations stripped)
-    // Company triggers: line is just L, N, LN, Ln (case insensitive), possibly with surrounding symbols
-    const companyMatch = line.match(/^[^0-9*]*\b(LN|Ln|NL|L|N)\b[^0-9]*$/i);
-    if (companyMatch) {
-      if (curLines.length) sections.push({ company: curCompany, lines: curLines });
-      const code = companyMatch[1].toUpperCase();
-      if (code === 'LN' || code === 'NL') curCompany = '#98';
-      else if (code === 'L') curCompany = '#9';
-      else curCompany = '#8';
-      curLines = [];
-      continue;
+    // Detect company line: any line containing L and/or N (case insensitive)
+    // that does NOT look like a bet line (no 4-digit number)
+    // e.g. "L3n3", "LN", "Ln", "*LN", "L", "N"
+    if (!/\d{4}/.test(line)) {
+      const hasL = /l/i.test(line);
+      const hasN = /n/i.test(line);
+      if (hasL || hasN) {
+        if (curLines.length) sections.push({ company: curCompany, lines: curLines });
+        if (hasL && hasN) curCompany = '#98';
+        else if (hasL) curCompany = '#9';
+        else curCompany = '#8';
+        curLines = [];
+        continue;
+      }
     }
 
     // Skip pure header/meta lines (TT header, date lines, etc.)
     if (/^\(TT\)$/i.test(line)) continue;
-    if (/^\d{6}\s+\d{4}\s+\(\d+\)$/.test(line)) continue; // receipt header
+    if (/^\d{6}\s+\d{4}\s+\(\d+\)$/.test(line)) continue;
     if (/^\(\d+\)$/.test(line)) continue;
-    if (/^\d{2}\/\d{2}$/.test(line)) continue; // date like 12/04
-    if (/^\*LN$/i.test(line) || /^\*L$/i.test(line) || /^\*N$/i.test(line)) {
-      // *LN style company marker
-      const code = line.replace('*','').toUpperCase();
-      if (curLines.length) sections.push({ company: curCompany, lines: curLines });
-      if (code === 'LN') curCompany = '#98';
-      else if (code === 'L') curCompany = '#9';
-      else curCompany = '#8';
-      curLines = [];
-      continue;
-    }
+    if (/^\d{2}\/\d{2}$/.test(line)) continue;
     if (/^[A-Za-z]{1,4}$/.test(line) && !/^(bbox|box|ibox|HE)$/i.test(line)) {
       // Single letter section markers like "L" already handled above
       continue;
