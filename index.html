@@ -876,7 +876,7 @@ function processSara(raw) {
 
   const day = new Date().getDay();
   const isWeeklyDay = day === 0 || day === 3 || day === 6;
-  const filterNote = isWeeklyDay ? '' : '\n⚠️ 今天非星期三/六/日，已自动过滤 M/P/T/S/B/K/W';
+  const filterNote = (tomorrowMode || isWeeklyDay) ? '' : '\n⚠️ 今天非星期三/六/日，已自动过滤 M/P/T/S/B/K/W';
 
   return results.join('\n\n\n') +
     '\n\n' + '─'.repeat(20) +
@@ -935,11 +935,12 @@ function processSaraBlock(raw, available) {
       }
     }
 
-    // Bet line: NNNN=amounts
-    const betMatch = line.match(/^(\d{4})\s*=\s*(.+)$/);
+    // Bet line: NNNN=amounts OR NNNN-amounts (e.g. 5649-5B-5S-5A1)
+    const betMatch = line.match(/^(\d{4})\s*[=\-]\s*(.+)$/);
     if (betMatch) {
       const num = betMatch[1];
-      const rest = betMatch[2];
+      // Normalize: replace - between amount tokens with space for easier parsing
+      const rest = betMatch[2].replace(/-(?=[0-9])/g, ' ');
       const isIBox = /ibox/i.test(rest);
       const isBox  = /\bbox\b/i.test(rest) && !isIBox;
       const bM = rest.match(/(\d+(?:\.\d+)?)\s*B(?!ox)/i);
