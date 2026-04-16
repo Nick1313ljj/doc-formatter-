@@ -810,6 +810,7 @@ function showToast(msg) {
 // FORMAT 4 — 沙拉
 // ════════════════════════════════
 const SARA_MAP = { M:'1', P:'2', T:'3', S:'4', B:'5', K:'6', W:'7', H:'8', E:'9', L:'L', N:'N' };
+const SARA_LETTERS = new Set(['M','P','T','S','B','K','W','H','E','L','N']);
 
 function runFormat4() {
   const raw = document.getElementById('input4').value.trim();
@@ -818,67 +819,97 @@ function runFormat4() {
 }
 
 function processSara(raw) {
-  const stripWA = l => l.replace(/^\[\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}(?:\s*[AP]M)?\]\s*[^:]+:\s*/i, '').trim();
+  // Split into WA message blocks if headers present
+  const blocks = splitWABlocks(raw);
+  const results = blocks.map(b => processSaraBlock(b)).filter(r => r);
+  return results.join('\n\n\n');
+}
 
+function splitWABlocks(raw) {
+  const lines = raw.split('\n');
+  const waRe = /^\[\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}/;
+  const hasWA = lines.some(l => waRe.test(l));
+  if (!hasWA) return [raw];
+
+  const blocks = [];
+  let cur = [];
+  for (const line of lines) {
+    if (waRe.test(line)) {
+      if (cur.length) blocks.push(cur.join('\n'));
+      cur = [line];
+    } else {
+      cur.push(line);
+    }
+  }
+  if (cur.length) blocks.push(cur.join('\n'));
+  return blocks.filter(b => b.trim());
+}
+
+function processSaraBlock(raw) {
+  const stripWA = l => l.replace(/^\[\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}(?:\s*[AP]M)?\]\s*[^:]+:\s*/i, '').trim();
   const lines = raw.split('\n').map(l => stripWA(l)).filter(l => l.length > 0);
 
   let header = '';
   const betLines = [];
   let pastGT = false;
+  // Default: inherit from previous bet line; initial default is 1#0#0
+  let lastBig = 1, lastSmall = 0, lastA1 = 0;
 
   for (const line of lines) {
-    // Stop at GT
     if (/^GT\s*=/i.test(line)) { pastGT = true; continue; }
     if (pastGT) continue;
 
-    // Skip meta/header lines
+    // Skip meta lines
     if (/^\(TT\)$/i.test(line)) continue;
     if (/^\(COPY\)$/i.test(line)) continue;
-    if (/^\(\d+\)$/.test(line)) continue;          // (62183)
-    if (/^\d{2}\/\d{2}$/.test(line)) continue;     // 15/04
-    if (/^\d{2}\.\d{2}\.\d{2}\s+\d{4}$/.test(line)) continue; // 26.04.15 1812
-    if (/^\d{6}\s+\d{4}/.test(line)) continue;     // 260415 1812
-    if (/^\d{1,2}[A-Za-z]{3}$/.test(line)) continue; // 15Apr
+    if (/^\(\d+\)$/.test(line)) continue;
+    if (/^\d{2}\/\d{2}$/.test(line)) continue;
+    if (/^\d{2}\.\d{2}\.\d{2}\s+\d{4}$/.test(line)) continue;
+    if (/^\d{6}\s+\d{4}/.test(line)) continue;
+    if (/^\d{1,2}[A-Za-z]{3}$/.test(line)) continue;  // 15Apr
     if (/^(FREE|DRAGON|NINE|MAGNUM|TOTO|SPORTS)\b/i.test(line)) continue;
     if (/^Points:/i.test(line)) continue;
     if (/^RM\d/i.test(line)) continue;
-    if (/^\d{6}\+\d/.test(line)) continue;         // JP numbers like 592753+9
-    if (/^[\d\s+]+$/.test(line) && !/\d{4}=/.test(line) && !/\d{4}\s+\d/.test(line)) {
-      // pure number lines that aren't bet lines
-      if (!/^\d{4}/.test(line)) continue;
+    if (/^\d+\+\d/.test(line)) continue;  // 592753+9
+
+    // Company code line: optional * + only letters from SARA_MAP, no digits
+    const compMatch = line.match(/^\*?([A-Za-z]+)$/);
+    if (compMatch) {
+      const letters = compMatch[1].toUpperCase().split('');
+      // All letters must be valid SARA letters
+      if (letters.every(l => SARA_LETTERS.has(l))) {
+        header = '#' + letters.map(l => SARA_MAP[l]).join('');
+        continue;
+      }
     }
 
-    // Company code line: starts with * followed by letters, no 4-digit bet pattern
-    if (/^\*[A-Za-z]+$/.test(line)) {
-      const letters = line.slice(1).toUpperCase().split('');
-      header = '#' + letters.map(l => SARA_MAP[l] || l).join('');
-      continue;
-    }
-
-    // Bet line: NNNN=NB [NS] [NA1] [(Box)/(IBox)]
+    // Bet line: NNNN=amounts [(Box)/(IBox)/box/ibox]
     const betMatch = line.match(/^(\d{4})\s*=\s*(.+)$/);
     if (betMatch) {
       const num = betMatch[1];
       const rest = betMatch[2];
-
-      const isIBox = /\(IBox\)/i.test(rest);
-      const isBox  = /\(Box\)/i.test(rest) && !isIBox;
-
+      const isIBox = /ibox/i.test(rest);
+      const isBox  = /\bbox\b/i.test(rest) && !isIBox;
       const bM = rest.match(/(\d+(?:\.\d+)?)\s*B(?!ox)/i);
       const sM = rest.match(/(\d+(?:\.\d+)?)\s*S(?!A)/i);
       const aM = rest.match(/(\d+(?:\.\d+)?)\s*A1?(?!\d)/i);
-
-      const big  = bM ? parseFloat(bM[1]) : 0;
-      const sml  = sM ? parseFloat(sM[1]) : 0;
-      const a1   = aM ? parseFloat(aM[1]) : 0;
-
+      lastBig   = bM ? parseFloat(bM[1]) : 0;
+      lastSmall = sM ? parseFloat(sM[1]) : 0;
+      lastA1    = aM ? parseFloat(aM[1]) : 0;
       const prefix = isIBox ? '**' : isBox ? '*' : '';
-      betLines.push(`${prefix}${num}#${fmtSara(big)}#${fmtSara(sml)}#${fmtSara(a1)}`);
+      betLines.push(`${prefix}${num}#${fmtSara(lastBig)}#${fmtSara(lastSmall)}#${fmtSara(lastA1)}`);
+      continue;
+    }
+
+    // Bare 4-digit number → inherit previous amounts
+    const bareMatch = line.match(/^(\d{4})$/);
+    if (bareMatch) {
+      betLines.push(`${bareMatch[1]}#${fmtSara(lastBig)}#${fmtSara(lastSmall)}#${fmtSara(lastA1)}`);
       continue;
     }
   }
 
-  if (!betLines.length) return '未识别到投注内容';
+  if (!betLines.length && !header) return null;
   return (header ? header + '\n' : '') + betLines.join('\n');
 }
 
