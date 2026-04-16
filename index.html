@@ -117,11 +117,25 @@
 
 <!-- API Key (only shown for Format 1) -->
 <div class="api-section" id="apiSection">
-  <div class="api-row">
+  <!-- Engine selector -->
+  <div style="display:flex;gap:6px;margin-bottom:10px">
+    <button id="engineClaude" class="hbtn" onclick="selectEngine('claude')"
+      style="color:var(--accent);border-color:var(--accent);background:var(--accent-dim)">Claude Haiku</button>
+    <button id="engineKimi" class="hbtn" onclick="selectEngine('kimi')">Kimi</button>
+  </div>
+  <!-- Claude key row -->
+  <div class="api-row" id="claudeRow">
     <span class="api-label">Claude API Key</span>
     <input class="api-input" type="password" id="apiKey" placeholder="sk-ant-..." oninput="saveApiKey()" />
     <button class="hbtn" onclick="testAPI()">测试</button>
-    <button class="hbtn" onclick="toggleApiVis()">显示</button>
+    <button class="hbtn" onclick="toggleApiVis('apiKey', this)">显示</button>
+  </div>
+  <!-- Kimi key row -->
+  <div class="api-row" id="kimiRow" style="display:none">
+    <span class="api-label">Kimi API Key</span>
+    <input class="api-input" type="password" id="kimiKey" placeholder="sk-..." oninput="saveKimiKey()" />
+    <button class="hbtn" onclick="testKimiAPI()">测试</button>
+    <button class="hbtn" onclick="toggleApiVis('kimiKey', this)">显示</button>
   </div>
   <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px">API Key 已自动保存到本机，下次无需重新输入</div>
 </div>
@@ -271,34 +285,69 @@ function switchTab(i) {
 // ════════════════════════════════
 // API KEY
 // ════════════════════════════════
+let currentEngine = 'claude';
+
+function selectEngine(engine) {
+  currentEngine = engine;
+  document.getElementById('claudeRow').style.display = engine === 'claude' ? 'flex' : 'none';
+  document.getElementById('kimiRow').style.display   = engine === 'kimi'   ? 'flex' : 'none';
+  const cBtn = document.getElementById('engineClaude');
+  const kBtn = document.getElementById('engineKimi');
+  if (engine === 'claude') {
+    cBtn.style.cssText = 'color:var(--accent);border-color:var(--accent);background:var(--accent-dim)';
+    kBtn.style.cssText = '';
+  } else {
+    kBtn.style.cssText = 'color:var(--blue);border-color:var(--blue);background:var(--blue-dim)';
+    cBtn.style.cssText = '';
+  }
+}
+
 function getKey() { return document.getElementById('apiKey').value.trim(); }
+function getKimiKey() { return document.getElementById('kimiKey').value.trim(); }
 
 function saveApiKey() {
   const key = getKey();
   if (key) localStorage.setItem('claude_api_key', key);
 }
+function saveKimiKey() {
+  const key = getKimiKey();
+  if (key) localStorage.setItem('kimi_api_key', key);
+}
 
 function loadApiKey() {
   const saved = localStorage.getItem('claude_api_key');
   if (saved) document.getElementById('apiKey').value = saved;
+  const kimi = localStorage.getItem('kimi_api_key');
+  if (kimi) document.getElementById('kimiKey').value = kimi;
 }
 
-function toggleApiVis() {
-  const el = document.getElementById('apiKey');
-  const btn = event.target;
+function toggleApiVis(id, btn) {
+  const el = document.getElementById(id);
   if (el.type === 'password') { el.type = 'text'; btn.textContent = '隐藏'; }
   else { el.type = 'password'; btn.textContent = '显示'; }
 }
 
 async function testAPI() {
   const key = getKey();
-  if (!key) { showToast('请先输入 API Key'); return; }
+  if (!key) { showToast('请先输入 Claude API Key'); return; }
   showToast('测试中...');
   try {
-    const res = await callClaude(key, 'Say "OK" only.', null);
-    showToast('API Key 有效 ✓');
+    await callClaude(key, 'Say "OK" only.', null);
+    showToast('Claude API Key 有效 ✓');
   } catch(e) {
-    showToast('API Key 无效: ' + e.message);
+    showToast('无效: ' + e.message);
+  }
+}
+
+async function testKimiAPI() {
+  const key = getKimiKey();
+  if (!key) { showToast('请先输入 Kimi API Key'); return; }
+  showToast('测试中...');
+  try {
+    await callKimi(key, 'Say "OK" only.', null);
+    showToast('Kimi API Key 有效 ✓');
+  } catch(e) {
+    showToast('无效: ' + e.message);
   }
 }
 
@@ -332,6 +381,36 @@ async function callClaude(key, prompt, imageBase64) {
   }
   const data = await res.json();
   return data.content[0].text;
+}
+
+// ════════════════════════════════
+// KIMI API CALL
+// ════════════════════════════════
+async function callKimi(key, prompt, imageBase64) {
+  const content = [];
+  if (imageBase64) {
+    content.push({ type: 'image_url', image_url: { url: `data:${imageBase64.type};base64,${imageBase64.data}` } });
+  }
+  content.push({ type: 'text', text: prompt });
+
+  const res = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + key,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'moonshot-v1-8k',
+      messages: [{ role: 'user', content }],
+      max_tokens: 2048
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    throw new Error(err.error?.message || res.statusText);
+  }
+  const data = await res.json();
+  return data.choices[0].message.content;
 }
 
 // ════════════════════════════════
@@ -383,8 +462,8 @@ function onImageSelected(e) {
 
 async function runOCR() {
   if (!selectedImage) { showToast('请先上传图片'); return; }
-  const key = getKey();
-  if (!key) { showToast('请先输入 Claude API Key'); return; }
+  const key = currentEngine === 'kimi' ? getKimiKey() : getKey();
+  if (!key) { showToast(`请先输入 ${currentEngine === 'kimi' ? 'Kimi' : 'Claude'} API Key`); return; }
 
   const btn = document.getElementById('ocrBtn');
   const spinner = document.getElementById('ocrSpinner');
@@ -414,7 +493,9 @@ STRICT RULES:
 ONLY output the final extracted text.`;
 
   try {
-    const result = await callClaude(key, prompt, selectedImage);
+    const result = currentEngine === 'kimi'
+      ? await callKimi(key, prompt, selectedImage)
+      : await callClaude(key, prompt, selectedImage);
     document.getElementById('output0').textContent = result;
   } catch(e) {
     document.getElementById('output0').textContent = '识别失败: ' + e.message;
