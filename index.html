@@ -233,10 +233,16 @@
   <div class="section">
     <div class="sec-label">输入文本</div>
     <textarea id="input4" placeholder="粘贴单据内容，包含 *MPTSHE 等公司代码行和投注行..." style="min-height:160px"></textarea>
-    <div class="btn-row" style="margin-top:10px">
-      <button class="btn btn-go" onclick="runFormat4()">▶ 转换</button>
-      <button class="hbtn" onclick="document.getElementById('input4').value=''">✕ 清空</button>
-      <button class="hbtn blue" onclick="pasteTo('input4')">📋 粘贴</button>
+    <div class="btn-row" style="margin-top:10px;justify-content:space-between;align-items:center">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-go" onclick="runFormat4()">▶ 转换</button>
+        <button class="hbtn" onclick="document.getElementById('input4').value=''">✕ 清空</button>
+        <button class="hbtn blue" onclick="pasteTo('input4')">📋 粘贴</button>
+      </div>
+      <button id="tomorrowBtn" class="hbtn" onclick="toggleTomorrow()"
+        style="border-color:var(--warn);color:var(--muted);margin-left:16px;white-space:nowrap">
+        📅 明日模式: 关
+      </button>
     </div>
   </div>
   <div class="section">
@@ -815,7 +821,26 @@ const SARA_LETTERS = new Set(['M','P','T','S','B','K','W','H','E','L','N']);
 const WEEKLY_ONLY = new Set(['M','P','T','S','B','K','W']);
 const DAILY = new Set(['H','E','L','N']);
 
+let tomorrowMode = false;
+
+function toggleTomorrow() {
+  tomorrowMode = !tomorrowMode;
+  const btn = document.getElementById('tomorrowBtn');
+  if (tomorrowMode) {
+    btn.textContent = '📅 明日模式: 开';
+    btn.style.color = 'var(--warn)';
+    btn.style.borderColor = 'var(--warn)';
+    btn.style.background = 'rgba(220,96,39,0.08)';
+  } else {
+    btn.textContent = '📅 明日模式: 关';
+    btn.style.color = 'var(--muted)';
+    btn.style.borderColor = 'var(--warn)';
+    btn.style.background = 'transparent';
+  }
+}
+
 function todayAvailableLetters() {
+  if (tomorrowMode) return SARA_LETTERS; // skip date filter
   const day = new Date().getDay(); // 0=Sun,1=Mon,...,6=Sat
   const isWeeklyDay = day === 0 || day === 3 || day === 6;
   return isWeeklyDay ? SARA_LETTERS : DAILY;
