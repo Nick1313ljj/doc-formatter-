@@ -132,6 +132,7 @@
   <button class="tab" onclick="switchTab(1)">② 排版助手</button>
   <button class="tab" onclick="switchTab(2)">③ 查理斯</button>
   <button class="tab" onclick="switchTab(3)">④ ABC</button>
+  <button class="tab" onclick="switchTab(4)">⑤ 沙拉</button>
 </div>
 
 <!-- ══ Panel 0: 文字提取 (OCR) ══ -->
@@ -223,6 +224,26 @@
     <div class="output-wrap">
       <div class="output" id="output3">—</div>
       <button class="copy-btn" onclick="copyOutput(3)">复制</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Panel 4: 沙拉 ══ -->
+<div class="panel" id="panel4">
+  <div class="section">
+    <div class="sec-label">输入文本</div>
+    <textarea id="input4" placeholder="粘贴单据内容，包含 *MPTSHE 等公司代码行和投注行..." style="min-height:160px"></textarea>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-go" onclick="runFormat4()">▶ 转换</button>
+      <button class="hbtn" onclick="document.getElementById('input4').value=''">✕ 清空</button>
+      <button class="hbtn blue" onclick="pasteTo('input4')">📋 粘贴</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="sec-label">输出结果</div>
+    <div class="output-wrap">
+      <div class="output" id="output4">—</div>
+      <button class="copy-btn" onclick="copyOutput(4)">复制</button>
     </div>
   </div>
 </div>
@@ -783,6 +804,87 @@ function showToast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ════════════════════════════════
+// FORMAT 4 — 沙拉
+// ════════════════════════════════
+const SARA_MAP = { M:'1', P:'2', T:'3', S:'4', B:'5', K:'6', W:'7', H:'8', E:'9', L:'L', N:'N' };
+
+function runFormat4() {
+  const raw = document.getElementById('input4').value.trim();
+  if (!raw) { showToast('请先输入文本'); return; }
+  document.getElementById('output4').textContent = processSara(raw);
+}
+
+function processSara(raw) {
+  const stripWA = l => l.replace(/^\[\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}(?:\s*[AP]M)?\]\s*[^:]+:\s*/i, '').trim();
+
+  const lines = raw.split('\n').map(l => stripWA(l)).filter(l => l.length > 0);
+
+  let header = '';
+  const betLines = [];
+  let pastGT = false;
+
+  for (const line of lines) {
+    // Stop at GT
+    if (/^GT\s*=/i.test(line)) { pastGT = true; continue; }
+    if (pastGT) continue;
+
+    // Skip meta/header lines
+    if (/^\(TT\)$/i.test(line)) continue;
+    if (/^\(COPY\)$/i.test(line)) continue;
+    if (/^\(\d+\)$/.test(line)) continue;          // (62183)
+    if (/^\d{2}\/\d{2}$/.test(line)) continue;     // 15/04
+    if (/^\d{2}\.\d{2}\.\d{2}\s+\d{4}$/.test(line)) continue; // 26.04.15 1812
+    if (/^\d{6}\s+\d{4}/.test(line)) continue;     // 260415 1812
+    if (/^\d{1,2}[A-Za-z]{3}$/.test(line)) continue; // 15Apr
+    if (/^(FREE|DRAGON|NINE|MAGNUM|TOTO|SPORTS)\b/i.test(line)) continue;
+    if (/^Points:/i.test(line)) continue;
+    if (/^RM\d/i.test(line)) continue;
+    if (/^\d{6}\+\d/.test(line)) continue;         // JP numbers like 592753+9
+    if (/^[\d\s+]+$/.test(line) && !/\d{4}=/.test(line) && !/\d{4}\s+\d/.test(line)) {
+      // pure number lines that aren't bet lines
+      if (!/^\d{4}/.test(line)) continue;
+    }
+
+    // Company code line: starts with * followed by letters, no 4-digit bet pattern
+    if (/^\*[A-Za-z]+$/.test(line)) {
+      const letters = line.slice(1).toUpperCase().split('');
+      header = '#' + letters.map(l => SARA_MAP[l] || l).join('');
+      continue;
+    }
+
+    // Bet line: NNNN=NB [NS] [NA1] [(Box)/(IBox)]
+    const betMatch = line.match(/^(\d{4})\s*=\s*(.+)$/);
+    if (betMatch) {
+      const num = betMatch[1];
+      const rest = betMatch[2];
+
+      const isIBox = /\(IBox\)/i.test(rest);
+      const isBox  = /\(Box\)/i.test(rest) && !isIBox;
+
+      const bM = rest.match(/(\d+(?:\.\d+)?)\s*B(?!ox)/i);
+      const sM = rest.match(/(\d+(?:\.\d+)?)\s*S(?!A)/i);
+      const aM = rest.match(/(\d+(?:\.\d+)?)\s*A1?(?!\d)/i);
+
+      const big  = bM ? parseFloat(bM[1]) : 0;
+      const sml  = sM ? parseFloat(sM[1]) : 0;
+      const a1   = aM ? parseFloat(aM[1]) : 0;
+
+      const prefix = isIBox ? '**' : isBox ? '*' : '';
+      betLines.push(`${prefix}${num}#${fmtSara(big)}#${fmtSara(sml)}#${fmtSara(a1)}`);
+      continue;
+    }
+  }
+
+  if (!betLines.length) return '未识别到投注内容';
+  return (header ? header + '\n' : '') + betLines.join('\n');
+}
+
+function fmtSara(n) {
+  if (n === 0) return '0';
+  return n % 1 === 0 ? String(n) : n.toFixed(1);
 }
 
 // Init
