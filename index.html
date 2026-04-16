@@ -393,18 +393,26 @@ async function callKimi(key, prompt, imageBase64) {
   }
   content.push({ type: 'text', text: prompt });
 
-  const res = await fetch('https://api.moonshot.cn/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + key,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'moonshot-v1-8k',
-      messages: [{ role: 'user', content }],
-      max_tokens: 2048
-    })
-  });
+  // Use vision model when image is present, text model otherwise
+  const model = imageBase64 ? 'moonshot-v1-8k-vision-preview' : 'moonshot-v1-8k';
+
+  let res;
+  try {
+    res = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + key,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content }],
+        max_tokens: 2048
+      })
+    });
+  } catch(netErr) {
+    throw new Error('网络错误：Kimi API 可能不支持从浏览器直接调用（CORS 限制）。建议改用 Claude。');
+  }
   if (!res.ok) {
     const err = await res.json().catch(()=>({}));
     throw new Error(err.error?.message || res.statusText);
