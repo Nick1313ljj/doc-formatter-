@@ -315,16 +315,41 @@ let selectedImage = null;
 function onImageSelected(e) {
   const file = e.target.files[0];
   if (!file) return;
+  // Reset other input so same file can be selected again
+  document.getElementById('imgInput').value = '';
+  document.getElementById('imgCamera').value = '';
+
   const reader = new FileReader();
   reader.onload = ev => {
     const dataURL = ev.target.result;
-    const base64 = dataURL.split(',')[1];
-    const type = file.type;
-    selectedImage = { data: base64, type };
-    document.getElementById('uploadPreview').src = dataURL;
-    document.getElementById('uploadPreview').style.display = 'block';
-    document.getElementById('uploadLabel').textContent = '✓ ' + file.name;
-    document.getElementById('uploadArea').classList.add('has-image');
+    // Compress image to stay under 4MB base64
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      // Scale down if too large
+      const MAX = 1800;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      // Try quality 0.85 first, reduce if still too big
+      let quality = 0.85;
+      let compressedURL = canvas.toDataURL('image/jpeg', quality);
+      while (compressedURL.length > 5000000 && quality > 0.3) {
+        quality -= 0.1;
+        compressedURL = canvas.toDataURL('image/jpeg', quality);
+      }
+      const base64 = compressedURL.split(',')[1];
+      selectedImage = { data: base64, type: 'image/jpeg' };
+      document.getElementById('uploadPreview').src = compressedURL;
+      document.getElementById('uploadPreview').style.display = 'block';
+      document.getElementById('uploadLabel').textContent = '✓ ' + file.name;
+      document.getElementById('uploadArea').classList.add('has-image');
+    };
+    img.src = dataURL;
   };
   reader.readAsDataURL(file);
 }
