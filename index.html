@@ -811,6 +811,24 @@ function showToast(msg) {
 // ════════════════════════════════
 const SARA_MAP = { M:'1', P:'2', T:'3', S:'4', B:'5', K:'6', W:'7', H:'8', E:'9', L:'L', N:'N' };
 const SARA_LETTERS = new Set(['M','P','T','S','B','K','W','H','E','L','N']);
+// Only open Wed(3), Sat(6), Sun(0)
+const WEEKLY_ONLY = new Set(['M','P','T','S','B','K','W']);
+const DAILY = new Set(['H','E','L','N']);
+
+function todayAvailableLetters() {
+  const day = new Date().getDay(); // 0=Sun,1=Mon,...,6=Sat
+  const isWeeklyDay = day === 0 || day === 3 || day === 6;
+  return isWeeklyDay ? SARA_LETTERS : DAILY;
+}
+
+// Calculate box permutations for a 4-digit number string
+function boxPerms(num) {
+  const freq = {};
+  for (const d of num) freq[d] = (freq[d] || 0) + 1;
+  let denom = 1;
+  for (const f of Object.values(freq)) for (let i = 2; i <= f; i++) denom *= i;
+  return 24 / denom; // 4! = 24
+}
 
 function runFormat4() {
   const raw = document.getElementById('input4').value.trim();
@@ -819,10 +837,26 @@ function runFormat4() {
 }
 
 function processSara(raw) {
-  // Split into WA message blocks if headers present
   const blocks = splitWABlocks(raw);
-  const results = blocks.map(b => processSaraBlock(b)).filter(r => r);
-  return results.join('\n\n\n');
+  const available = todayAvailableLetters();
+  const results = [];
+  let grandTotal = 0;
+
+  for (const b of blocks) {
+    const { text, total } = processSaraBlock(b, available);
+    if (text) { results.push(text); grandTotal += total; }
+  }
+
+  if (!results.length) return '未识别到投注内容';
+
+  const day = new Date().getDay();
+  const isWeeklyDay = day === 0 || day === 3 || day === 6;
+  const filterNote = isWeeklyDay ? '' : '\n⚠️ 今天非星期三/六/日，已自动过滤 M/P/T/S/B/K/W';
+
+  return results.join('\n\n\n') +
+    '\n\n' + '─'.repeat(20) +
+    '\n💰 总计需付：RM ' + grandTotal.toFixed(2) +
+    filterNote;
 }
 
 function splitWABlocks(raw) {
@@ -830,29 +864,23 @@ function splitWABlocks(raw) {
   const waRe = /^\[\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}/;
   const hasWA = lines.some(l => waRe.test(l));
   if (!hasWA) return [raw];
-
   const blocks = [];
   let cur = [];
   for (const line of lines) {
-    if (waRe.test(line)) {
-      if (cur.length) blocks.push(cur.join('\n'));
-      cur = [line];
-    } else {
-      cur.push(line);
-    }
+    if (waRe.test(line)) { if (cur.length) blocks.push(cur.join('\n')); cur = [line]; }
+    else cur.push(line);
   }
   if (cur.length) blocks.push(cur.join('\n'));
   return blocks.filter(b => b.trim());
 }
 
-function processSaraBlock(raw) {
+function processSaraBlock(raw, available) {
   const stripWA = l => l.replace(/^\[\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}(?:\s*[AP]M)?\]\s*[^:]+:\s*/i, '').trim();
   const lines = raw.split('\n').map(l => stripWA(l)).filter(l => l.length > 0);
 
-  let header = '';
-  const betLines = [];
+  let rawLetters = []; // letters from input before filtering
+  const betEntries = []; // {prefix, num, big, small, a1}
   let pastGT = false;
-  // Default: inherit from previous bet line; initial default is 1#0#0
   let lastBig = 1, lastSmall = 0, lastA1 = 0;
 
   for (const line of lines) {
@@ -866,24 +894,23 @@ function processSaraBlock(raw) {
     if (/^\d{2}\/\d{2}$/.test(line)) continue;
     if (/^\d{2}\.\d{2}\.\d{2}\s+\d{4}$/.test(line)) continue;
     if (/^\d{6}\s+\d{4}/.test(line)) continue;
-    if (/^\d{1,2}[A-Za-z]{3}$/.test(line)) continue;  // 15Apr
+    if (/^\d{1,2}[A-Za-z]{3}$/.test(line)) continue;
     if (/^(FREE|DRAGON|NINE|MAGNUM|TOTO|SPORTS)\b/i.test(line)) continue;
     if (/^Points:/i.test(line)) continue;
     if (/^RM\d/i.test(line)) continue;
-    if (/^\d+\+\d/.test(line)) continue;  // 592753+9
+    if (/^\d+\+\d/.test(line)) continue;
 
-    // Company code line: optional * + only letters from SARA_MAP, no digits
+    // Company code line
     const compMatch = line.match(/^\*?([A-Za-z]+)$/);
     if (compMatch) {
       const letters = compMatch[1].toUpperCase().split('');
-      // All letters must be valid SARA letters
       if (letters.every(l => SARA_LETTERS.has(l))) {
-        header = '#' + letters.map(l => SARA_MAP[l]).join('');
+        rawLetters = letters;
         continue;
       }
     }
 
-    // Bet line: NNNN=amounts [(Box)/(IBox)/box/ibox]
+    // Bet line: NNNN=amounts
     const betMatch = line.match(/^(\d{4})\s*=\s*(.+)$/);
     if (betMatch) {
       const num = betMatch[1];
@@ -896,21 +923,47 @@ function processSaraBlock(raw) {
       lastBig   = bM ? parseFloat(bM[1]) : 0;
       lastSmall = sM ? parseFloat(sM[1]) : 0;
       lastA1    = aM ? parseFloat(aM[1]) : 0;
-      const prefix = isIBox ? '**' : isBox ? '*' : '';
-      betLines.push(`${prefix}${num}#${fmtSara(lastBig)}#${fmtSara(lastSmall)}#${fmtSara(lastA1)}`);
+      betEntries.push({ prefix: isIBox ? '**' : isBox ? '*' : '', num, big: lastBig, small: lastSmall, a1: lastA1, isBox, isIBox });
       continue;
     }
 
-    // Bare 4-digit number → inherit previous amounts
+    // Bare 4-digit
     const bareMatch = line.match(/^(\d{4})$/);
     if (bareMatch) {
-      betLines.push(`${bareMatch[1]}#${fmtSara(lastBig)}#${fmtSara(lastSmall)}#${fmtSara(lastA1)}`);
+      betEntries.push({ prefix: '', num: bareMatch[1], big: lastBig, small: lastSmall, a1: lastA1, isBox: false, isIBox: false });
       continue;
     }
   }
 
-  if (!betLines.length && !header) return null;
-  return (header ? header + '\n' : '') + betLines.join('\n');
+  if (!betEntries.length && !rawLetters.length) return { text: null, total: 0 };
+
+  // Filter letters by today's availability
+  const filteredLetters = rawLetters.filter(l => available.has(l));
+  const sides = filteredLetters.length || 1; // default 1 side if no header
+
+  // Build header
+  const header = filteredLetters.length ? '#' + filteredLetters.map(l => SARA_MAP[l]).join('') : '';
+
+  // Build bet lines and calculate total
+  const outLines = [];
+  let blockTotal = 0;
+
+  for (const e of betEntries) {
+    outLines.push(`${e.prefix}${e.num}#${fmtSara(e.big)}#${fmtSara(e.small)}#${fmtSara(e.a1)}`);
+    const base = e.big + e.small + e.a1;
+    let cost;
+    if (e.isIBox) {
+      cost = base * sides; // IBox: amount is already the total, just multiply by sides
+    } else if (e.isBox) {
+      cost = base * boxPerms(e.num) * sides;
+    } else {
+      cost = base * sides;
+    }
+    blockTotal += cost;
+  }
+
+  const text = (header ? header + '\n' : '') + outLines.join('\n');
+  return { text, total: blockTotal };
 }
 
 function fmtSara(n) {
