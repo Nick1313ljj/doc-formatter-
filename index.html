@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>单据排版工具 v6</title>
+<title>单据排版工具 v7</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -115,7 +115,7 @@
 <div class="header">
   <div class="badge">单据排版系统</div>
   <h1>单据 <em>排版工具</em></h1>
-  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v6</p>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v7</p>
 </div>
 
 <!-- API Key (only shown for Format 1) -->
@@ -149,7 +149,7 @@
   <button class="tab" onclick="switchTab(1)">② 排版助手</button>
   <button class="tab" onclick="switchTab(2)">③ 查理斯</button>
   <button class="tab" onclick="switchTab(3)">④ ABC</button>
-  <button class="tab" onclick="switchTab(4)">⑤ 沙拉</button>
+  <button class="tab" onclick="switchTab(4)">⑤ 沙拉吉她</button>
 </div>
 
 <!-- ══ Panel 0: 文字提取 (OCR) ══ -->
@@ -264,10 +264,7 @@
   </div>
   <div class="section">
     <div class="sec-label">输出结果</div>
-    <div class="output-wrap">
-      <div class="output" id="output4">—</div>
-      <button class="copy-btn" onclick="copyOutput(4)">复制</button>
-    </div>
+    <div id="output4container"><div class="output">—</div></div>
   </div>
 </div>
 
@@ -961,30 +958,95 @@ function boxPerms(num) {
 function runFormat4() {
   const raw = document.getElementById('input4').value.trim();
   if (!raw) { showToast('请先输入文本'); return; }
-  document.getElementById('output4').textContent = processSara(raw);
-}
 
-function processSara(raw) {
   const blocks = splitWABlocks(raw);
   const available = todayAvailableLetters();
-  const results = [];
+  const container = document.getElementById('output4container');
+  container.innerHTML = '';
+
   let grandTotal = 0;
+  let cardIndex = 0;
 
   for (const b of blocks) {
     const { text, total } = processSaraBlock(b, available);
-    if (text) { results.push(text); grandTotal += total; }
+    if (!text) continue;
+    grandTotal += total;
+
+    const cards = splitToCards(text);
+    for (const cardText of cards) {
+      cardIndex++;
+      container.appendChild(makeCard(cardText));
+    }
   }
 
-  if (!results.length) return '未识别到投注内容';
+  if (!cardIndex) {
+    container.innerHTML = '<div class="output">未识别到投注内容</div>';
+    return;
+  }
 
   const day = new Date().getDay();
   const isWeeklyDay = day === 0 || day === 3 || day === 6;
   const filterNote = (tomorrowMode || isWeeklyDay) ? '' : '\n⚠️ 今天非星期三/六/日，已自动过滤 M/P/T/S/B/K/W';
+  const totalDiv = document.createElement('div');
+  totalDiv.style.cssText = 'font-family:var(--mono);font-size:12px;padding:10px 4px;color:var(--muted);white-space:pre-wrap;border-top:1px solid var(--border);margin-top:4px';
+  totalDiv.textContent = '💰 总计需付：RM ' + grandTotal.toFixed(2) + filterNote;
+  container.appendChild(totalDiv);
+}
 
-  return results.join('\n\n\n') +
-    '\n\n' + '─'.repeat(20) +
-    '\n💰 总计需付：RM ' + grandTotal.toFixed(2) +
-    filterNote;
+// Split text block into ≤39-line cards, repeating header on continuation cards
+function splitToCards(text) {
+  const lines = text.split('\n');
+  if (lines.length <= 39) return [text];
+
+  const hasHeader = lines[0].startsWith('#');
+  const header = hasHeader ? lines[0] : null;
+  const body = hasHeader ? lines.slice(1) : lines;
+  const maxBody = hasHeader ? 38 : 39;
+
+  const cards = [];
+  for (let i = 0; i < body.length; i += maxBody) {
+    const chunk = body.slice(i, i + maxBody);
+    cards.push(header ? header + '\n' + chunk.join('\n') : chunk.join('\n'));
+  }
+  return cards;
+}
+
+// Create a single output card with copy button
+function makeCard(text) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin-bottom:12px';
+
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:4px';
+
+  const btn = document.createElement('button');
+  btn.textContent = '复制';
+  btn.style.cssText = 'background:var(--accent);color:#fff;border:none;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:6px 16px;cursor:pointer;transition:background .2s,color .2s';
+
+  const outDiv = document.createElement('div');
+  outDiv.className = 'output';
+  outDiv.style.marginBottom = '0';
+  outDiv.textContent = text;
+
+  btn.onclick = function() {
+    const t = outDiv.textContent;
+    const b = this;
+    const markDone = () => {
+      b.textContent = '✓ 已复制';
+      b.style.background = 'var(--warn)';
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(t).then(markDone).catch(() => { fallbackCopy(t); markDone(); });
+    } else {
+      fallbackCopy(t);
+      markDone();
+    }
+  };
+
+  btnRow.appendChild(btn);
+  wrap.appendChild(btnRow);
+  wrap.appendChild(outDiv);
+  return wrap;
 }
 
 function splitWABlocks(raw) {
