@@ -121,7 +121,7 @@
   <div style="display:flex;gap:6px;margin-bottom:10px">
     <button id="engineClaude" class="hbtn" onclick="selectEngine('claude')"
       style="color:var(--accent);border-color:var(--accent);background:var(--accent-dim)">Claude Haiku</button>
-    <button id="engineKimi" class="hbtn" onclick="selectEngine('kimi')">Kimi</button>
+    <button id="engineMinimax" class="hbtn" onclick="selectEngine('minimax')">MiniMax</button>
   </div>
   <!-- Claude key row -->
   <div class="api-row" id="claudeRow">
@@ -130,12 +130,12 @@
     <button class="hbtn" onclick="testAPI()">测试</button>
     <button class="hbtn" onclick="toggleApiVis('apiKey', this)">显示</button>
   </div>
-  <!-- Kimi key row -->
-  <div class="api-row" id="kimiRow" style="display:none">
-    <span class="api-label">Kimi API Key</span>
-    <input class="api-input" type="password" id="kimiKey" placeholder="sk-..." oninput="saveKimiKey()" />
-    <button class="hbtn" onclick="testKimiAPI()">测试</button>
-    <button class="hbtn" onclick="toggleApiVis('kimiKey', this)">显示</button>
+  <!-- MiniMax key row -->
+  <div class="api-row" id="minimaxRow" style="display:none">
+    <span class="api-label">MiniMax API Key</span>
+    <input class="api-input" type="password" id="minimaxKey" placeholder="eyJ..." oninput="saveMinimaxKey()" />
+    <button class="hbtn" onclick="testMinimaxAPI()">测试</button>
+    <button class="hbtn" onclick="toggleApiVis('minimaxKey', this)">显示</button>
   </div>
   <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px">API Key 已自动保存到本机，下次无需重新输入</div>
 </div>
@@ -289,36 +289,36 @@ let currentEngine = 'claude';
 
 function selectEngine(engine) {
   currentEngine = engine;
-  document.getElementById('claudeRow').style.display = engine === 'claude' ? 'flex' : 'none';
-  document.getElementById('kimiRow').style.display   = engine === 'kimi'   ? 'flex' : 'none';
+  document.getElementById('claudeRow').style.display   = engine === 'claude'  ? 'flex' : 'none';
+  document.getElementById('minimaxRow').style.display  = engine === 'minimax' ? 'flex' : 'none';
   const cBtn = document.getElementById('engineClaude');
-  const kBtn = document.getElementById('engineKimi');
+  const mBtn = document.getElementById('engineMinimax');
   if (engine === 'claude') {
     cBtn.style.cssText = 'color:var(--accent);border-color:var(--accent);background:var(--accent-dim)';
-    kBtn.style.cssText = '';
+    mBtn.style.cssText = '';
   } else {
-    kBtn.style.cssText = 'color:var(--blue);border-color:var(--blue);background:var(--blue-dim)';
+    mBtn.style.cssText = 'color:var(--blue);border-color:var(--blue);background:var(--blue-dim)';
     cBtn.style.cssText = '';
   }
 }
 
 function getKey() { return document.getElementById('apiKey').value.trim(); }
-function getKimiKey() { return document.getElementById('kimiKey').value.trim(); }
+function getMinimaxKey() { return document.getElementById('minimaxKey').value.trim(); }
 
 function saveApiKey() {
   const key = getKey();
   if (key) localStorage.setItem('claude_api_key', key);
 }
-function saveKimiKey() {
-  const key = getKimiKey();
-  if (key) localStorage.setItem('kimi_api_key', key);
+function saveMinimaxKey() {
+  const key = getMinimaxKey();
+  if (key) localStorage.setItem('minimax_api_key', key);
 }
 
 function loadApiKey() {
   const saved = localStorage.getItem('claude_api_key');
   if (saved) document.getElementById('apiKey').value = saved;
-  const kimi = localStorage.getItem('kimi_api_key');
-  if (kimi) document.getElementById('kimiKey').value = kimi;
+  const mm = localStorage.getItem('minimax_api_key');
+  if (mm) document.getElementById('minimaxKey').value = mm;
 }
 
 function toggleApiVis(id, btn) {
@@ -339,13 +339,13 @@ async function testAPI() {
   }
 }
 
-async function testKimiAPI() {
-  const key = getKimiKey();
-  if (!key) { showToast('请先输入 Kimi API Key'); return; }
+async function testMinimaxAPI() {
+  const key = getMinimaxKey();
+  if (!key) { showToast('请先输入 MiniMax API Key'); return; }
   showToast('测试中...');
   try {
-    await callKimi(key, 'Say "OK" only.', null);
-    showToast('Kimi API Key 有效 ✓');
+    await callMinimax(key, 'Say "OK" only.', null);
+    showToast('MiniMax API Key 有效 ✓');
   } catch(e) {
     showToast('无效: ' + e.message);
   }
@@ -384,21 +384,21 @@ async function callClaude(key, prompt, imageBase64) {
 }
 
 // ════════════════════════════════
-// KIMI API CALL
+// MINIMAX API CALL
 // ════════════════════════════════
-async function callKimi(key, prompt, imageBase64) {
+async function callMinimax(key, prompt, imageBase64) {
   const content = [];
   if (imageBase64) {
     content.push({ type: 'image_url', image_url: { url: `data:${imageBase64.type};base64,${imageBase64.data}` } });
   }
   content.push({ type: 'text', text: prompt });
 
-  // Use vision model when image is present, text model otherwise
-  const model = imageBase64 ? 'moonshot-v1-8k-vision-preview' : 'moonshot-v1-8k';
+  // MiniMax-VL-01 supports vision; MiniMax-Text-01 for text-only
+  const model = imageBase64 ? 'MiniMax-VL-01' : 'MiniMax-Text-01';
 
   let res;
   try {
-    res = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+    res = await fetch('https://api.minimax.chat/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + key,
@@ -411,7 +411,7 @@ async function callKimi(key, prompt, imageBase64) {
       })
     });
   } catch(netErr) {
-    throw new Error('网络错误：Kimi API 可能不支持从浏览器直接调用（CORS 限制）。建议改用 Claude。');
+    throw new Error('网络错误：MiniMax API 无法连接，请检查网络或改用 Claude。');
   }
   if (!res.ok) {
     const err = await res.json().catch(()=>({}));
@@ -470,8 +470,8 @@ function onImageSelected(e) {
 
 async function runOCR() {
   if (!selectedImage) { showToast('请先上传图片'); return; }
-  const key = currentEngine === 'kimi' ? getKimiKey() : getKey();
-  if (!key) { showToast(`请先输入 ${currentEngine === 'kimi' ? 'Kimi' : 'Claude'} API Key`); return; }
+  const key = currentEngine === 'minimax' ? getMinimaxKey() : getKey();
+  if (!key) { showToast(`请先输入 ${currentEngine === 'minimax' ? 'MiniMax' : 'Claude'} API Key`); return; }
 
   const btn = document.getElementById('ocrBtn');
   const spinner = document.getElementById('ocrSpinner');
@@ -501,8 +501,8 @@ STRICT RULES:
 ONLY output the final extracted text.`;
 
   try {
-    const result = currentEngine === 'kimi'
-      ? await callKimi(key, prompt, selectedImage)
+    const result = currentEngine === 'minimax'
+      ? await callMinimax(key, prompt, selectedImage)
       : await callClaude(key, prompt, selectedImage);
     document.getElementById('output0').textContent = result;
   } catch(e) {
