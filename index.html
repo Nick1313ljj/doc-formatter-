@@ -393,8 +393,8 @@ async function callMinimax(key, prompt, imageBase64) {
   }
   content.push({ type: 'text', text: prompt });
 
-  // MiniMax-VL-01 supports vision; MiniMax-Text-01 for text-only
-  const model = imageBase64 ? 'MiniMax-VL-01' : 'MiniMax-Text-01';
+  // abab6.5g-chat supports vision (multimodal); abab6.5s-chat for text-only
+  const model = imageBase64 ? 'abab6.5g-chat' : 'abab6.5s-chat';
 
   let res;
   try {
