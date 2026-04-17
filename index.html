@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>单据排版工具 v12</title>
+<title>单据排版工具 v13</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -107,6 +107,25 @@
 
   /* ABC format special */
   .abc-note { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.6; }
+
+  /* Print styles for thermal printer */
+  @media print {
+    body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
+    body::before { display: none !important; }
+    .wrap > *:not(#printTarget) { display: none !important; }
+    #printTarget {
+      display: block !important;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11pt;
+      line-height: 1.5;
+      color: #000;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-width: 58mm;
+      margin: 0;
+      padding: 0;
+    }
+  }
 </style>
 </head>
 <body>
@@ -115,7 +134,7 @@
 <div class="header">
   <div class="badge">单据排版系统</div>
   <h1>单据 <em>排版工具</em></h1>
-  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v12</p>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v13</p>
 </div>
 
 <!-- API Key (only shown for Format 1) -->
@@ -287,6 +306,10 @@
     <div class="output-wrap">
       <div class="output" id="output5">—</div>
       <button class="copy-btn" onclick="copyOutput(5)">复制</button>
+    </div>
+    <div style="margin-top:10px;display:flex;justify-content:flex-end">
+      <button class="btn" onclick="printOutput5()"
+        style="background:var(--purple);color:#fff;font-size:11px;padding:8px 18px">🖨 打印</button>
     </div>
   </div>
 </div>
@@ -1312,11 +1335,19 @@ function processL3N3(raw) {
       continue;
     }
 
-    // Try to transform company marker line
     const trimmed = line.trim();
+
+    // Date line: DD/MM → {MMDD}
+    const dateMatch = trimmed.match(/^(\d{2})\/(\d{2})$/);
+    if (dateMatch) {
+      const leading = line.match(/^(\s*)/)[1];
+      out.push(leading + '{' + dateMatch[2] + dateMatch[1] + '}');
+      continue;
+    }
+
+    // Try to transform company marker line
     const transformed = transformCompanyLine(trimmed);
     if (transformed !== null) {
-      // Preserve leading whitespace
       const leading = line.match(/^(\s*)/)[1];
       out.push(leading + transformed);
     } else {
@@ -1325,6 +1356,22 @@ function processL3N3(raw) {
   }
 
   return out.join('\n');
+}
+
+function printOutput5() {
+  const text = document.getElementById('output5').textContent;
+  if (!text || text === '—') { showToast('没有内容可打印'); return; }
+
+  // Create a hidden print-only div
+  let el = document.getElementById('printTarget');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'printTarget';
+    el.style.display = 'none';
+    document.querySelector('.wrap').appendChild(el);
+  }
+  el.textContent = text;
+  window.print();
 }
 
 // Init
