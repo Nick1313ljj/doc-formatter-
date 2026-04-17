@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>单据排版工具 v14</title>
+<title>单据排版工具 v15</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -134,7 +134,7 @@
 <div class="header">
   <div class="badge">单据排版系统</div>
   <h1>单据 <em>排版工具</em></h1>
-  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v14</p>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v15</p>
 </div>
 
 <!-- API Key (only shown for Format 1) -->
@@ -1428,11 +1428,12 @@ async function printOutput5() {
     device.gatt.disconnect();
 
   } catch(e) {
-    if (e.name === 'NotFoundError' || e.message?.includes('cancelled')) {
-      showToast('已取消');
+    // Any failure: fall back to system print dialog
+    printViaDialog(text);
+    if (e.name === 'NotFoundError' || e.message?.includes('cancel') || e.message?.includes('Cancel')) {
+      showToast('蓝牙未连接，已改用系统打印');
     } else {
-      showToast('蓝牙打印失败：' + e.message + '  改用系统打印');
-      printViaDialog(text);
+      showToast('蓝牙失败，已改用系统打印：' + e.message);
     }
   }
 }
