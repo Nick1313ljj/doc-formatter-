@@ -387,9 +387,9 @@ async function callClaude(key, prompt, imageBase64) {
 // GEMINI API CALL
 // ════════════════════════════════
 async function callGemini(key, prompt, imageBase64) {
-  // Gemini 1.5 Flash — free tier, supports vision, stable v1 API
-  const model = 'gemini-1.5-flash';
-  const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
+  // Use gemini-pro-vision for image, gemini-pro for text — most widely available free models
+  const model = imageBase64 ? 'gemini-pro-vision' : 'gemini-pro';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
   const parts = [];
   if (imageBase64) {
