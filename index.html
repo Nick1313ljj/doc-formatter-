@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>单据排版工具 v11</title>
+<title>单据排版工具 v12</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -115,7 +115,7 @@
 <div class="header">
   <div class="badge">单据排版系统</div>
   <h1>单据 <em>排版工具</em></h1>
-  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v11</p>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v12</p>
 </div>
 
 <!-- API Key (only shown for Format 1) -->
@@ -1279,15 +1279,15 @@ function transformCompanyLine(line) {
   if (!/^[EH]+$/.test(letters)) return null;
 
   if (lnMode) {
-    // *E→*L, *H→*N, *EH→LN (drop * when both)
-    if (hasE && hasH) return 'LN';
-    if (hasE) return (hasStar ? '*' : '') + 'L';
-    return (hasStar ? '*' : '') + 'N';
+    // *E→(L), *H→(N), *EH→(LN)
+    if (hasE && hasH) return '(LN)';
+    if (hasE) return '(L)';
+    return '(N)';
   } else {
-    // *E→*L3, *H→*N3, *EH→L3N3 (drop * when both)
-    if (hasE && hasH) return 'L3N3';
-    if (hasE) return (hasStar ? '*' : '') + 'L3';
-    return (hasStar ? '*' : '') + 'N3';
+    // *E→(L3), *H→(N3), *EH→(L3N3)
+    if (hasE && hasH) return '(L3N3)';
+    if (hasE) return '(L3)';
+    return '(N3)';
   }
 }
 
