@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>单据排版工具 v5</title>
+<title>单据排版工具 v6</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -115,7 +115,7 @@
 <div class="header">
   <div class="badge">单据排版系统</div>
   <h1>单据 <em>排版工具</em></h1>
-  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v5</p>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v6</p>
 </div>
 
 <!-- API Key (only shown for Format 1) -->
@@ -345,10 +345,10 @@ async function testAPI() {
 async function testGeminiAPI() {
   const key = getGeminiKey();
   if (!key) { showToast('请先输入 Gemini API Key'); return; }
-  showToast('测试中...');
+  showToast('检测可用模型中...');
   try {
-    await callGemini(key, 'Say "OK" only.', null);
-    showToast('Gemini API Key 有效 ✓');
+    const model = await getGeminiModel(key);
+    showToast('Gemini 有效 ✓ 模型: ' + model);
   } catch(e) {
     showToast('无效: ' + e.message);
   }
@@ -389,9 +389,26 @@ async function callClaude(key, prompt, imageBase64) {
 // ════════════════════════════════
 // GEMINI API CALL
 // ════════════════════════════════
+// Auto-detect first available Gemini vision model for this API key
+async function getGeminiModel(key) {
+  const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+  const res = await fetch(listUrl);
+  if (!res.ok) throw new Error('无法获取模型列表，请检查 API Key 是否正确');
+  const data = await res.json();
+  const models = (data.models || []).map(m => m.name.replace('models/', ''));
+  // Prefer flash models that support generateContent
+  const preferred = ['gemini-2.0-flash','gemini-1.5-flash','gemini-2.0-flash-lite','gemini-1.5-pro','gemini-2.0-pro'];
+  for (const p of preferred) {
+    if (models.some(m => m.startsWith(p))) return models.find(m => m.startsWith(p));
+  }
+  // Fallback: first model with 'flash' or 'pro' in name
+  const fallback = models.find(m => m.includes('flash') || (m.includes('pro') && !m.includes('vision')));
+  if (fallback) return fallback;
+  throw new Error('找不到可用的 Gemini 模型。可用模型：' + models.slice(0,5).join(', '));
+}
+
 async function callGemini(key, prompt, imageBase64) {
-  // gemini-1.5-flash supports both text and vision
-  const model = 'gemini-1.5-flash';
+  const model = await getGeminiModel(key);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
   const parts = [];
