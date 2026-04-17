@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>单据排版工具 v13</title>
+<title>单据排版工具 v14</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -134,7 +134,7 @@
 <div class="header">
   <div class="badge">单据排版系统</div>
   <h1>单据 <em>排版工具</em></h1>
-  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v13</p>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v14</p>
 </div>
 
 <!-- API Key (only shown for Format 1) -->
@@ -1358,11 +1358,114 @@ function processL3N3(raw) {
   return out.join('\n');
 }
 
-function printOutput5() {
+async function printOutput5() {
   const text = document.getElementById('output5').textContent;
   if (!text || text === '—') { showToast('没有内容可打印'); return; }
 
-  // Create a hidden print-only div
+  if (!navigator.bluetooth) {
+    showToast('此浏览器不支持 Web Bluetooth，改用系统打印');
+    printViaDialog(text);
+    return;
+  }
+
+  try {
+    showToast('正在搜索打印机...');
+    // MP58-04 and similar cheap thermal printers use these BLE service UUIDs
+    const PRINTER_SERVICES = [
+      '000018f0-0000-1000-8000-00805f9b34fb',  // Generic thermal
+      'e7810a71-73ae-499d-8c15-faa9aef0c3f2',  // Common ESC/POS BLE
+      '49535343-fe7d-4ae5-8fa9-9fafd205e455',  // ISSC BLE Serial
+    ];
+    const PRINTER_CHARS = [
+      '00002af1-0000-1000-8000-00805f9b34fb',
+      'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
+      '49535343-8841-43f4-a8d4-ecbe34729bb3',
+    ];
+
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: PRINTER_SERVICES
+    });
+
+    showToast('连接中...');
+    const server = await device.gatt.connect();
+
+    let writeChar = null;
+    for (const svcUUID of PRINTER_SERVICES) {
+      try {
+        const svc = await server.getPrimaryService(svcUUID);
+        for (const charUUID of PRINTER_CHARS) {
+          try {
+            const ch = await svc.getCharacteristic(charUUID);
+            if (ch.properties.write || ch.properties.writeWithoutResponse) {
+              writeChar = ch;
+              break;
+            }
+          } catch {}
+        }
+        if (writeChar) break;
+      } catch {}
+    }
+
+    if (!writeChar) {
+      // Try getting any writable characteristic
+      const services = await server.getPrimaryServices();
+      outer: for (const svc of services) {
+        const chars = await svc.getCharacteristics();
+        for (const ch of chars) {
+          if (ch.properties.write || ch.properties.writeWithoutResponse) {
+            writeChar = ch; break outer;
+          }
+        }
+      }
+    }
+
+    if (!writeChar) throw new Error('找不到可写入的打印特征值');
+
+    showToast('打印中...');
+    await sendEscPos(writeChar, text);
+    showToast('打印完成 ✓');
+    device.gatt.disconnect();
+
+  } catch(e) {
+    if (e.name === 'NotFoundError' || e.message?.includes('cancelled')) {
+      showToast('已取消');
+    } else {
+      showToast('蓝牙打印失败：' + e.message + '  改用系统打印');
+      printViaDialog(text);
+    }
+  }
+}
+
+// ESC/POS: send text in chunks (BLE MTU ~20 bytes)
+async function sendEscPos(char, text) {
+  const encoder = new TextEncoder();
+  // ESC @ = initialize, then text lines, then 4 line feeds to advance paper
+  const init = new Uint8Array([0x1B, 0x40]);
+  const feed = new Uint8Array([0x1B, 0x64, 0x04]); // ESC d 4
+
+  const textBytes = encoder.encode(text + '\n');
+  const full = new Uint8Array(init.length + textBytes.length + feed.length);
+  full.set(init, 0);
+  full.set(textBytes, init.length);
+  full.set(feed, init.length + textBytes.length);
+
+  // Send in 20-byte chunks
+  const CHUNK = 20;
+  const useWriteNoResp = !char.properties.write && char.properties.writeWithoutResponse;
+  for (let i = 0; i < full.length; i += CHUNK) {
+    const chunk = full.slice(i, i + CHUNK);
+    if (useWriteNoResp) {
+      await char.writeValueWithoutResponse(chunk);
+    } else {
+      await char.writeValue(chunk);
+    }
+    // Small delay to avoid overflow
+    await new Promise(r => setTimeout(r, 30));
+  }
+}
+
+function printViaDialog(text) {
   let el = document.getElementById('printTarget');
   if (!el) {
     el = document.createElement('div');
