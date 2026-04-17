@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>单据排版工具 v9</title>
+<title>单据排版工具 v10</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -115,7 +115,7 @@
 <div class="header">
   <div class="badge">单据排版系统</div>
   <h1>单据 <em>排版工具</em></h1>
-  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v9</p>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v10</p>
 </div>
 
 <!-- API Key (only shown for Format 1) -->
@@ -750,7 +750,14 @@ function processCharles(raw) {
   let curLines = [];
 
   for (const rawLine of lines) {
-    const line = stripWA(rawLine).trim();
+    // Normalize box variants before any matching:
+    // "bo x", "b o x", "b bix", "b box", "bbox", "box" → all become "bbox"
+    const line = stripWA(rawLine).trim()
+      .replace(/\bi\s*b\s*o\s*x\b/gi, 'ibox')
+      .replace(/b\s*b[oiu][ox]\s*[x]?\b/gi, 'bbox')
+      .replace(/\bbo\s+x\b/gi, 'bbox')
+      .replace(/\bb\s*box\b/gi, 'bbox')
+      .replace(/\bbox\b/gi, 'bbox');
     if (!line) continue;
 
     // Detect company line: any line containing L and/or N (case insensitive)
@@ -785,28 +792,28 @@ function processCharles(raw) {
     // Also: "5999 1b box", "15041" (no space)
 
     // Try format: XXXX=NB [(IBox|Box)]
-    let m = line.match(/^(\d{4})=(\d+(?:\.\d+)?)B?\s*(\(IBox\)|\(Box\)|ibox|bbox|b\s*box)?/i);
+    let m = line.match(/^(\d{4})=(\d+(?:\.\d+)?)B?\s*(ibox|bbox)?/i);
     if (m) {
       const num = m[1];
       const amt = m[2];
-      const boxType = (m[3]||'').toLowerCase().replace(/\s/,'');
+      const boxType = (m[3]||'').toLowerCase();
       let prefix = '';
-      if (boxType === '(ibox)' || boxType === 'ibox') prefix = '**';
-      else if (boxType === '(box)' || boxType === 'bbox' || boxType === 'bbox') prefix = '*';
+      if (boxType === 'ibox') prefix = '**';
+      else if (boxType === 'bbox') prefix = '*';
       curLines.push(prefix + num + '#' + amt);
       continue;
     }
 
-    // Try format: XXXX N [b box | bbox | (Box)] — space separated, or XXXXN (no space, last digit is amount)
+    // Try format: XXXX N [bbox | ibox] — space separated, or XXXXN (no space, last digit is amount)
     // Handle "15041" as 1504 + 1
-    m = line.match(/^(\d{4})\s*(\d+(?:\.\d+)?)\s*(b\s*box|bbox|\(box\)|\(ibox\)|ibox)?/i);
+    m = line.match(/^(\d{4})\s*(\d+(?:\.\d+)?)\s*(bbox|ibox)?/i);
     if (m) {
       const num = m[1];
       const amt = m[2];
-      const boxRaw = (m[3]||'').toLowerCase().replace(/\s/,'');
+      const boxRaw = (m[3]||'').toLowerCase();
       let prefix = '';
-      if (boxRaw === '(ibox)' || boxRaw === 'ibox') prefix = '**';
-      else if (boxRaw === 'bbox' || boxRaw === '(box)' || boxRaw === 'b box' || boxRaw === 'bbox') prefix = '*';
+      if (boxRaw === 'ibox') prefix = '**';
+      else if (boxRaw === 'bbox') prefix = '*';
       curLines.push(prefix + num + '#' + amt);
       continue;
     }
