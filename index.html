@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>单据排版工具 v10</title>
+<title>单据排版工具 v11</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -115,7 +115,7 @@
 <div class="header">
   <div class="badge">单据排版系统</div>
   <h1>单据 <em>排版工具</em></h1>
-  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v10</p>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v11</p>
 </div>
 
 <!-- API Key (only shown for Format 1) -->
@@ -150,6 +150,7 @@
   <button class="tab" onclick="switchTab(2)">③ 查理斯</button>
   <button class="tab" onclick="switchTab(3)">④ ABC</button>
   <button class="tab" onclick="switchTab(4)">⑤ 沙拉吉她</button>
+  <button class="tab" onclick="switchTab(5)">⑥ l3n3</button>
 </div>
 
 <!-- ══ Panel 0: 文字提取 (OCR) ══ -->
@@ -265,6 +266,28 @@
   <div class="section">
     <div class="sec-label">输出结果</div>
     <div id="output4container"><div class="output">—</div></div>
+  </div>
+</div>
+
+<!-- ══ Panel 5: l3n3 ══ -->
+<div class="panel" id="panel5">
+  <div class="section">
+    <div class="sec-label">输入文本</div>
+    <textarea id="input5" placeholder="粘贴单据内容，例如 *E、*H、*EH 等标记行..." style="min-height:160px"></textarea>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-go" onclick="runFormat5()">▶ 转换</button>
+      <button class="hbtn" onclick="document.getElementById('input5').value=''">✕ 清空</button>
+      <button class="hbtn blue" onclick="pasteTo('input5')">📋 粘贴</button>
+      <button id="lnModeBtn" class="hbtn" onclick="toggleLNMode()"
+        style="border:1.5px solid #e53e3e;color:#e53e3e;font-weight:600">LN</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="sec-label">输出结果</div>
+    <div class="output-wrap">
+      <div class="output" id="output5">—</div>
+      <button class="copy-btn" onclick="copyOutput(5)">复制</button>
+    </div>
   </div>
 </div>
 
@@ -1220,6 +1243,88 @@ function processSaraBlock(raw, available) {
 function fmtSara(n) {
   if (n === 0) return '0';
   return n % 1 === 0 ? String(n) : n.toFixed(1);
+}
+
+// ════════════════════════════════
+// FORMAT 5 — l3n3
+// ════════════════════════════════
+let lnMode = false;
+
+function toggleLNMode() {
+  lnMode = !lnMode;
+  const btn = document.getElementById('lnModeBtn');
+  if (lnMode) {
+    btn.style.background = '#e53e3e';
+    btn.style.color = '#fff';
+    btn.style.borderColor = '#e53e3e';
+  } else {
+    btn.style.background = 'transparent';
+    btn.style.color = '#e53e3e';
+    btn.style.borderColor = '#e53e3e';
+  }
+}
+
+function transformCompanyLine(line) {
+  // Match lines like *E, *H, *EH, *HE, *EHN etc (optional leading * + letters only)
+  const m = line.match(/^(\*?)([A-Za-z]+)$/);
+  if (!m) return null;
+  const hasStar = m[1] === '*';
+  const letters = m[2].toUpperCase();
+
+  // Only transform if line contains E or H (and nothing else unexpected)
+  const hasE = letters.includes('E');
+  const hasH = letters.includes('H');
+  if (!hasE && !hasH) return null;
+  // Must only contain E and H (no other letters that aren't E/H)
+  if (!/^[EH]+$/.test(letters)) return null;
+
+  if (lnMode) {
+    // *E→*L, *H→*N, *EH→LN (drop * when both)
+    if (hasE && hasH) return 'LN';
+    if (hasE) return (hasStar ? '*' : '') + 'L';
+    return (hasStar ? '*' : '') + 'N';
+  } else {
+    // *E→*L3, *H→*N3, *EH→L3N3 (drop * when both)
+    if (hasE && hasH) return 'L3N3';
+    if (hasE) return (hasStar ? '*' : '') + 'L3';
+    return (hasStar ? '*' : '') + 'N3';
+  }
+}
+
+function runFormat5() {
+  const raw = document.getElementById('input5').value.trim();
+  if (!raw) { showToast('请先输入文本'); return; }
+  document.getElementById('output5').textContent = processL3N3(raw);
+}
+
+function processL3N3(raw) {
+  const lines = raw.split('\n');
+  const out = [];
+  let gtFound = false;
+
+  for (const line of lines) {
+    if (gtFound) continue; // skip everything after GT line
+
+    // Check if this is the GT line — keep it, then stop
+    if (/^GT\s*=/i.test(line.trim())) {
+      out.push(line);
+      gtFound = true;
+      continue;
+    }
+
+    // Try to transform company marker line
+    const trimmed = line.trim();
+    const transformed = transformCompanyLine(trimmed);
+    if (transformed !== null) {
+      // Preserve leading whitespace
+      const leading = line.match(/^(\s*)/)[1];
+      out.push(leading + transformed);
+    } else {
+      out.push(line);
+    }
+  }
+
+  return out.join('\n');
 }
 
 // Init
