@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>单据排版工具 v8</title>
+<title>单据排版工具 v9</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -115,7 +115,7 @@
 <div class="header">
   <div class="badge">单据排版系统</div>
   <h1>单据 <em>排版工具</em></h1>
-  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v8</p>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v9</p>
 </div>
 
 <!-- API Key (only shown for Format 1) -->
@@ -606,8 +606,46 @@ function runFormat1() {
   const raw = document.getElementById('input1').value.trim();
   if (!raw) { showToast('请先输入文本'); return; }
 
-  const result = processFormat1(raw);
+  const result = /\d{4}--/.test(raw) ? processFormat1MultiDash(raw) : processFormat1(raw);
   document.getElementById('output1').textContent = result;
+}
+
+// Handle NNNN--2. 2. 1  lbox H E format
+function processFormat1MultiDash(raw) {
+  const segRegex = /(\d{4})--([\s\S]*?)(?=\d{4}--|$)/g;
+  const segments = [];
+  let m;
+  while ((m = segRegex.exec(raw)) !== null) {
+    segments.push({ num: m[1], rest: m[2].trim() });
+  }
+  if (!segments.length) return processFormat1(raw);
+
+  // Collect company letters (strip box keywords first so 'l' in lbox isn't mistaken for company L)
+  const compLetters = [];
+  for (const { rest } of segments) {
+    const cleanedForComp = rest.replace(/lbox|ibox|bbox|box/gi, '');
+    for (const ch of cleanedForComp.toUpperCase()) {
+      if (SARA_MAP[ch] !== undefined && !compLetters.includes(ch)) {
+        compLetters.push(ch);
+      }
+    }
+  }
+  const header = '#' + compLetters.map(l => SARA_MAP[l]).join('');
+
+  const lines = [header];
+  for (const { num, rest } of segments) {
+    const isIBox = /lbox|ibox/i.test(rest);
+    const isBox  = /\bbox\b/i.test(rest) && !isIBox;
+    // Remove keywords and letters, extract numeric amounts
+    const cleaned = rest.replace(/lbox|ibox|bbox|box/gi, '').replace(/[a-zA-Z]/g, ' ');
+    const amounts = [...cleaned.matchAll(/(\d+(?:\.\d+)?)/g)].map(x => parseFloat(x[1]));
+    const big   = amounts[0] !== undefined ? amounts[0] : 0;
+    const small = amounts[1] !== undefined ? amounts[1] : 0;
+    const a1    = amounts[2] !== undefined ? amounts[2] : 0;
+    const prefix = isIBox ? '**' : isBox ? '*' : '';
+    lines.push(`${prefix}${num}#${fmt(big)}#${fmt(small)}#${fmt(a1)}`);
+  }
+  return lines.join('\n');
 }
 
 function processFormat1(raw) {
