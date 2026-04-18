@@ -276,10 +276,14 @@
         <button class="hbtn" onclick="document.getElementById('input4').value=''">✕ 清空</button>
         <button class="hbtn blue" onclick="pasteTo('input4')">📋 粘贴</button>
       </div>
-      <button id="tomorrowBtn" class="hbtn" onclick="toggleTomorrow()"
-        style="border-color:var(--warn);color:var(--muted);margin-left:16px;white-space:nowrap">
-        📅 明日模式: 关
-      </button>
+      <div style="display:flex;gap:8px;align-items:center;margin-left:16px">
+        <button id="tomorrowBtn" class="hbtn" onclick="toggleTomorrow()"
+          style="border-color:var(--warn);color:var(--muted);white-space:nowrap">
+          📅 明日模式: 关
+        </button>
+        <button id="yqBtn" class="hbtn" onclick="toggleYQ()"
+          style="border:1.5px solid var(--blue);color:var(--blue);font-weight:600;white-space:nowrap">YQ</button>
+      </div>
     </div>
   </div>
   <div class="section">
@@ -1013,6 +1017,17 @@ const WEEKLY_ONLY = new Set(['M','P','T','S','B','K','W']);
 const DAILY = new Set(['H','E','L','N']);
 
 let tomorrowMode = false;
+let yqMode = false;
+
+function toggleYQ() {
+  yqMode = !yqMode;
+  const btn = document.getElementById('yqBtn');
+  if (yqMode) {
+    btn.style.cssText = 'border:1.5px solid var(--blue);color:#fff;background:var(--blue);font-weight:600;white-space:nowrap';
+  } else {
+    btn.style.cssText = 'border:1.5px solid var(--blue);color:var(--blue);font-weight:600;white-space:nowrap';
+  }
+}
 
 function toggleTomorrow() {
   tomorrowMode = !tomorrowMode;
@@ -1049,6 +1064,13 @@ function boxPerms(num) {
 function runFormat4() {
   const raw = document.getElementById('input4').value.trim();
   if (!raw) { showToast('请先输入文本'); return; }
+
+  if (yqMode) {
+    const container = document.getElementById('output4container');
+    container.innerHTML = '';
+    container.appendChild(makeCard(processYQ(raw)));
+    return;
+  }
 
   const blocks = splitWABlocks(raw);
   const available = todayAvailableLetters();
@@ -1266,6 +1288,36 @@ function processSaraBlock(raw, available) {
 function fmtSara(n) {
   if (n === 0) return '0';
   return n % 1 === 0 ? String(n) : n.toFixed(1);
+}
+
+// ════════════════════════════════
+// YQ MODE — convert company letters to numbers, remove empty lines
+// ════════════════════════════════
+function processYQ(raw) {
+  const lines = raw.split('\n');
+  const out = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Remove empty lines
+    if (!trimmed) continue;
+
+    // Company line: optional * + only letters that are in SARA_MAP
+    const compMatch = trimmed.match(/^\*?([A-Za-z]+)$/);
+    if (compMatch) {
+      const letters = compMatch[1].toUpperCase().split('');
+      if (letters.length > 0 && letters.every(l => SARA_MAP[l] !== undefined)) {
+        out.push('#' + letters.map(l => SARA_MAP[l]).join(''));
+        continue;
+      }
+    }
+
+    // Everything else: keep as-is
+    out.push(trimmed);
+  }
+
+  return out.join('\n');
 }
 
 // ════════════════════════════════
