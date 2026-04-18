@@ -869,10 +869,11 @@ function processCharles(raw) {
     // Normalize box variants before any matching:
     // "bo x", "b o x", "b bix", "b box", "bbox", "box" → all become "bbox"
     const line = stripWA(rawLine).trim()
-      .replace(/\bi\s*b\s*o\s*x\b/gi, 'ibox')
-      .replace(/b\s*b[oiu][ox]\s*[x]?\b/gi, 'bbox')
-      .replace(/\bbo\s+x\b/gi, 'bbox')
-      .replace(/\bb\s*box\b/gi, 'bbox')
+      .replace(/\(?\bi\s*b\s*o\s*x\b\)?/gi, 'ibox')
+      .replace(/\(?b\s*b[oiu][ox]\s*[x]?\b\)?/gi, 'bbox')
+      .replace(/\(?bo\s+x\b\)?/gi, 'bbox')
+      .replace(/\(?b\s*box\b\)?/gi, 'bbox')
+      .replace(/\(box\)/gi, 'bbox')
       .replace(/\bbox\b/gi, 'bbox');
     if (!line) continue;
 
