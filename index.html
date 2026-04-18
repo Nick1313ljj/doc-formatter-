@@ -1245,7 +1245,9 @@ function processSaraBlock(raw, available) {
       const bM = rest.match(/(\d+(?:\.\d+)?)\s*B(?!ox)/i);
       const sM = rest.match(/(\d+(?:\.\d+)?)\s*S(?!A)/i);
       const aM = rest.match(/(\d+(?:\.\d+)?)\s*A1?(?!\d)/i);
-      lastBig   = bM ? parseFloat(bM[1]) : 0;
+      // If no B/S/A suffix at all, plain number = big
+      const plainNum = (!bM && !sM && !aM) ? rest.match(/^(\d+(?:\.\d+)?)$/) : null;
+      lastBig   = bM ? parseFloat(bM[1]) : (plainNum ? parseFloat(plainNum[1]) : 0);
       lastSmall = sM ? parseFloat(sM[1]) : 0;
       lastA1    = aM ? parseFloat(aM[1]) : 0;
       betEntries.push({ prefix: isIBox ? '**' : isBox ? '*' : '', num, big: lastBig, small: lastSmall, a1: lastA1, isBox, isIBox });
