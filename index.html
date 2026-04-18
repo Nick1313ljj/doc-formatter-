@@ -1289,9 +1289,15 @@ function processSaraBlock(raw, available) {
     if (compMatch) {
       const letters = compMatch[1].toUpperCase().split('');
       if (letters.every(l => SARA_LETTERS.has(l))) {
-        // Flush current section before starting new company
-        flushSection();
-        curLetters = letters;
+        if (curEntries.length > 0) {
+          // Company at BOTTOM: assign letters to pending bets then flush
+          curLetters = letters;
+          flushSection();
+        } else {
+          // Company at TOP: flush any previous section, set letters for upcoming bets
+          flushSection();
+          curLetters = letters;
+        }
         lastBig = 1; lastSmall = 0; lastA1 = 0;
         continue;
       }
