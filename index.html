@@ -1068,7 +1068,13 @@ function runFormat4() {
   if (yqMode) {
     const container = document.getElementById('output4container');
     container.innerHTML = '';
-    container.appendChild(makeCard(processYQ(raw)));
+    const blocks = splitWABlocks(raw);
+    let anyOutput = false;
+    for (const b of blocks) {
+      const result = processYQ(b);
+      if (result.trim()) { container.appendChild(makeCard(result)); anyOutput = true; }
+    }
+    if (!anyOutput) container.innerHTML = '<div class="output">未识别到内容</div>';
     return;
   }
 
@@ -1294,16 +1300,17 @@ function fmtSara(n) {
 // YQ MODE — convert company letters to numbers, remove empty lines
 // ════════════════════════════════
 function processYQ(raw) {
+  const stripWA = l => l.replace(/^\[\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}(?:\s*[AP]M)?\]\s*[^:]+:\s*/i, '').trim();
   const lines = raw.split('\n');
   const out = [];
 
   for (const line of lines) {
-    const trimmed = line.trim();
+    const trimmed = stripWA(line);
 
     // Remove empty lines
     if (!trimmed) continue;
 
-    // Company line: optional * + only letters that are in SARA_MAP
+    // Company line: optional * + only letters that are all in SARA_MAP
     const compMatch = trimmed.match(/^\*?([A-Za-z]+)$/);
     if (compMatch) {
       const letters = compMatch[1].toUpperCase().split('');
