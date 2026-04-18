@@ -656,7 +656,9 @@ function runFormat1() {
   const raw = document.getElementById('input1').value.trim();
   if (!raw) { showToast('请先输入文本'); return; }
 
-  const result = /\d{4}--/.test(raw) ? processFormat1MultiDash(raw) : processFormat1(raw);
+  const result = /\d{4}--/.test(raw) ? processFormat1MultiDash(raw)
+               : raw.includes('_')   ? processFormat1Underscore(raw)
+               : processFormat1(raw);
   document.getElementById('output1').textContent = result;
 }
 
@@ -777,6 +779,70 @@ function processFormat1(raw) {
   }
 
   return companyHeader + '\n' + lines.join('\n');
+}
+
+// Handle NNNN_2_5912_23071_ ... _ibox_mpth format
+function processFormat1Underscore(raw) {
+  // Split by _ and trim
+  const tokens = raw.split('_').map(t => t.trim()).filter(Boolean);
+
+  let companyLetters = [];
+  let isIBox = false;
+  let isBox  = false;
+  const entries = []; // {num, big}
+  let pendingNum = null;
+
+  for (const tok of tokens) {
+    // IBox / Box
+    if (/^i\s*box$/i.test(tok)) { isIBox = true; continue; }
+    if (/^b\s*box$|^bbox$/i.test(tok)) { isBox = true; continue; }
+
+    // Company letters possibly with trailing "2天" etc — strip non-letter tail
+    const compPart = tok.replace(/\d+[\u5929\u65e5].*$/, '').trim(); // strip "2天"
+    if (compPart && /^[a-zA-Z]+$/.test(compPart)) {
+      for (const ch of compPart.toLowerCase()) {
+        if (LETTER_MAP[ch] !== undefined && !companyLetters.includes(ch)) companyLetters.push(ch);
+      }
+      continue;
+    }
+
+    // 4-digit number
+    if (/^\d{4}$/.test(tok)) {
+      if (pendingNum !== null) entries.push({ num: pendingNum, big: 1 });
+      pendingNum = tok;
+      continue;
+    }
+
+    // 5-digit: first digit = amount for pendingNum, last 4 = next number
+    if (/^\d{5}$/.test(tok)) {
+      const amt = parseInt(tok[0]);
+      const nextNum = tok.slice(1);
+      if (pendingNum !== null) entries.push({ num: pendingNum, big: amt });
+      pendingNum = nextNum;
+      continue;
+    }
+
+    // 1-3 digit amount for pending number
+    if (/^\d{1,3}$/.test(tok) && pendingNum !== null) {
+      entries.push({ num: pendingNum, big: parseInt(tok) });
+      pendingNum = null;
+      continue;
+    }
+  }
+  if (pendingNum !== null) entries.push({ num: pendingNum, big: 1 });
+
+  // Build company header
+  let header = '#';
+  for (const l of companyLetters) {
+    if (LETTER_MAP[l] !== undefined) header += LETTER_MAP[l];
+  }
+
+  const prefix = isIBox ? '**' : isBox ? '*' : '';
+  const lines = [header];
+  for (const e of entries) {
+    lines.push(`${prefix}${e.num}#${e.big}#0#0`);
+  }
+  return lines.join('\n');
 }
 
 // ════════════════════════════════
