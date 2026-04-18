@@ -544,48 +544,15 @@ async function runOCR() {
 
   const prompt = `You are an OCR extraction engine for lottery ticket images.
 
-CRITICAL RULE — READ THIS FIRST:
-Every lottery number is EXACTLY 4 digits (0–9). Letters/alphabet NEVER appear inside a lottery number.
-If a character inside a 4-digit group looks like a letter, it IS a digit written in handwriting — decode it as the closest digit, NOT as a letter.
-
-Mandatory letter→digit substitutions (apply unconditionally inside 4-digit groups):
-  S or s → 5    (most common: writer's 5 looks like S)
-  Z or z → 2
-  I or l → 1
-  O (letter O) → 0
-  B → 8
-  G → 6
-  b → 6
-  W → 3 (writer's 3 can look like W)
-  q → 9
-  g → 9
-
-HANDWRITING-SPECIFIC CONFUSION (verified from real image samples — do not ignore):
-
-  [4 / 7 / 9 triangle — most common error zone]
-  These three digits look similar in this writer's style. Use the TOP of the digit to decide:
-    • Closed round loop at top + tail curving left at bottom → 9
-    • Open angled top (like \) + no bottom curve → 7
-    • Open angle with a clear horizontal bar crossing the stem → 4
-  IMPORTANT: This writer's 7 very frequently looks like 4. When unsure between 4 and 7, prefer 7.
-  IMPORTANT: This writer's 9 sometimes looks like 4 AND sometimes looks like 7. Check the loop.
-
-  [1 vs 7]
-  ★ A shape that looks like "7" with NO crossbar and only one downstroke → it is 1
-
-  [2 vs 3 vs 5/S]
-  ★ Shape with TWO open arcs (one curving right at top, one curving right at bottom) → 3
-  ★ Shape like a flowing S-curve (top curves left, bottom curves right) → 5
-  ★ Shape with flat bottom stroke (zigzag or Z-like) → 2
-  IMPORTANT: Do NOT convert a "3"-shaped digit to 5. S→5 rule only applies when the shape has a
-  clear S-flow, NOT when both arcs open to the right (which is a 3).
-
 STRICT RULES:
 1. Extract ALL text exactly as shown. Do NOT explain, analyze, or add any extra words.
-2. Each lottery number group = exactly 4 digits. Apply ALL substitution rules above before outputting.
-3. Additional handwriting confusion to watch for:
+2. Each lottery number is exactly 4 digits. Read each digit carefully one by one.
+3. Common handwriting confusion to watch for:
    - 0 (zero) vs 6: zero is fully closed circle, 6 has a tail at top
-   - 8 vs B: always output 8
+   - 1 vs 7: 1 is straight, 7 has a horizontal bar at top
+   - 3 vs 8: 3 is open on left, 8 is fully closed
+   - 2 vs 7: different top shape
+   - 9 vs 4: 9 has closed loop, 4 has open angle
 4. Replace「·」or「-」(digit separators) with「#」
 5. If a line contains BOX or bbox or b box → add * prefix to that line
 6. Output each number on its own line. No numbering, no labels, no extra text.
