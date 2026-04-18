@@ -1259,6 +1259,7 @@ function processSaraBlock(raw, available) {
   let curEntries = [];
   let pastGT = false;
   let lastBig = 1, lastSmall = 0, lastA1 = 0;
+  let headerCompanySet = false; // true = company appeared BEFORE bets (header style)
 
   const flushSection = () => {
     if (curEntries.length > 0) {
@@ -1290,13 +1291,22 @@ function processSaraBlock(raw, available) {
       const letters = compMatch[1].toUpperCase().split('');
       if (letters.every(l => SARA_LETTERS.has(l))) {
         if (curEntries.length > 0) {
-          // Company at BOTTOM: assign letters to pending bets then flush
-          curLetters = letters;
-          flushSection();
+          if (headerCompanySet) {
+            // Previous company was a header → flush pending entries with it, new company is next header
+            flushSection();
+            curLetters = letters;
+            headerCompanySet = true;
+          } else {
+            // No header was set → this company is a footer for pending entries
+            curLetters = letters;
+            flushSection();
+            headerCompanySet = false;
+          }
         } else {
-          // Company at TOP: flush any previous section, set letters for upcoming bets
+          // No pending entries → company is a header for upcoming bets
           flushSection();
           curLetters = letters;
+          headerCompanySet = true;
         }
         lastBig = 1; lastSmall = 0; lastA1 = 0;
         continue;
