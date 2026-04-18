@@ -141,13 +141,13 @@
 <div class="api-section" id="apiSection">
   <!-- Engine selector -->
   <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-    <button id="engineClaude" class="hbtn" onclick="selectEngine('claude')"
-      style="color:var(--accent);border-color:var(--accent);background:var(--accent-dim)">Claude Haiku</button>
+    <button id="engineClaude" class="hbtn" onclick="selectEngine('claude')">Claude Haiku</button>
     <button id="engineGemini" class="hbtn" onclick="selectEngine('gemini')">Gemini</button>
-    <button id="engineDoubao" class="hbtn" onclick="selectEngine('doubao')">豆包视觉</button>
+    <button id="engineDoubao" class="hbtn" onclick="selectEngine('doubao')"
+      style="color:#e65c00;border-color:#e65c00;background:#fff3ec">豆包视觉</button>
   </div>
   <!-- Claude key row -->
-  <div class="api-row" id="claudeRow">
+  <div class="api-row" id="claudeRow" style="display:none">
     <span class="api-label">Claude API Key</span>
     <input class="api-input" type="password" id="apiKey" placeholder="sk-ant-..." oninput="saveApiKey()" />
     <button class="hbtn" onclick="testAPI()">测试</button>
@@ -161,7 +161,7 @@
     <button class="hbtn" onclick="toggleApiVis('geminiKey', this)">显示</button>
   </div>
   <!-- Doubao key row -->
-  <div class="api-row" id="doubaoRow" style="display:none">
+  <div class="api-row" id="doubaoRow">
     <span class="api-label">豆包 API Key</span>
     <input class="api-input" type="password" id="doubaoKey" placeholder="Ark API Key..." oninput="saveDoubaoKey()" />
     <button class="hbtn" onclick="testDoubaoAPI()">测试</button>
@@ -343,7 +343,7 @@ function switchTab(i) {
 // ════════════════════════════════
 // API KEY
 // ════════════════════════════════
-let currentEngine = 'claude';
+let currentEngine = 'doubao';
 
 function selectEngine(engine) {
   currentEngine = engine;
