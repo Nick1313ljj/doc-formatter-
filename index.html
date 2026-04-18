@@ -869,12 +869,12 @@ function processCharles(raw) {
     // Normalize box variants before any matching:
     // "bo x", "b o x", "b bix", "b box", "bbox", "box" → all become "bbox"
     const line = stripWA(rawLine).trim()
+      // ibox: any spacing/parens around i-b-o-x
       .replace(/\(?\bi\s*b\s*o\s*x\b\)?/gi, 'ibox')
-      .replace(/\(?b\s*b[oiu][ox]\s*[x]?\b\)?/gi, 'bbox')
-      .replace(/\(?bo\s+x\b\)?/gi, 'bbox')
-      .replace(/\(?b\s*box\b\)?/gi, 'bbox')
-      .replace(/\(box\)/gi, 'bbox')
-      .replace(/\bbox\b/gi, 'bbox');
+      // "b box" / "b bo x" / "b b o x" etc — b + whitespace + b-o-x with any internal spaces
+      .replace(/\bb\s+b\s*o\s*x\b/gi, 'bbox')
+      // "(Box)" / "box" / "bo x" / "b ox" / "b o x" — box with any internal spaces
+      .replace(/\(?\bb\s*o\s*x\b\)?/gi, 'bbox');
     if (!line) continue;
 
     // Detect company line: any line containing L and/or N (case insensitive)
