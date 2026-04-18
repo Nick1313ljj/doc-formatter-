@@ -1314,8 +1314,8 @@ function processSaraBlock(raw, available) {
       }
     }
 
-    // Bet line: NNNN#5#2#1# or NNNN#3#
-    const hashBetMatch = line.match(/^(\*{0,2})(\d{4})((?:#\d+(?:\.\d+)?)+)#?$/);
+    // Bet line: NNNN#5#2#1# or NNNN#3# or NNNN#5ibox / NNNN#5bbox
+    const hashBetMatch = line.match(/^(\*{0,2})(\d{4})((?:#\d+(?:\.\d+)?)+)#?\s*(ibox|bbox)?$/i);
     if (hashBetMatch) {
       const prefix = hashBetMatch[1];
       const num = hashBetMatch[2];
@@ -1323,9 +1323,11 @@ function processSaraBlock(raw, available) {
       lastBig   = vals[0] !== undefined ? vals[0] : 0;
       lastSmall = vals[1] !== undefined ? vals[1] : 0;
       lastA1    = vals[2] !== undefined ? vals[2] : 0;
-      const isIBox = prefix === '**';
-      const isBox  = prefix === '*';
-      curEntries.push({ prefix, num, big: lastBig, small: lastSmall, a1: lastA1, isBox, isIBox });
+      const suffixBox = (hashBetMatch[4] || '').toLowerCase();
+      const isIBox = prefix === '**' || suffixBox === 'ibox';
+      const isBox  = (prefix === '*' && !isIBox) || suffixBox === 'bbox';
+      const finalPrefix = isIBox ? '**' : isBox ? '*' : prefix;
+      curEntries.push({ prefix: finalPrefix, num, big: lastBig, small: lastSmall, a1: lastA1, isBox, isIBox });
       continue;
     }
 
