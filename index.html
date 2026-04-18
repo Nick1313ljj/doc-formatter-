@@ -1338,12 +1338,19 @@ function processSaraBlock(raw, available) {
       const bM = rest.match(/(\d+(?:\.\d+)?)\s*B(?!ox)/i);
       const sM = rest.match(/(\d+(?:\.\d+)?)\s*S(?!A)/i);
       const aM = rest.match(/(\d+(?:\.\d+)?)\s*A1?(?!\d)/i);
-      // Strip box/ibox keywords then try plain number
-      const restClean = rest.replace(/ibox|bbox/gi, '').trim();
-      const plainNum = (!bM && !sM && !aM) ? restClean.match(/^(\d+(?:\.\d+)?)$/) : null;
-      lastBig   = bM ? parseFloat(bM[1]) : (plainNum ? parseFloat(plainNum[1]) : 0);
-      lastSmall = sM ? parseFloat(sM[1]) : 0;
-      lastA1    = aM ? parseFloat(aM[1]) : 0;
+      if (bM || sM || aM) {
+        // Explicit B/S/A labels
+        lastBig   = bM ? parseFloat(bM[1]) : 0;
+        lastSmall = sM ? parseFloat(sM[1]) : 0;
+        lastA1    = aM ? parseFloat(aM[1]) : 0;
+      } else {
+        // No labels — extract all numbers in order as big, small, a1
+        const restClean = rest.replace(/ibox|bbox/gi, '').trim();
+        const nums = [...restClean.matchAll(/(\d+(?:\.\d+)?)/g)].map(m => parseFloat(m[1]));
+        lastBig   = nums[0] !== undefined ? nums[0] : 0;
+        lastSmall = nums[1] !== undefined ? nums[1] : 0;
+        lastA1    = nums[2] !== undefined ? nums[2] : 0;
+      }
       curEntries.push({ prefix: isIBox ? '**' : isBox ? '*' : '', num, big: lastBig, small: lastSmall, a1: lastA1, isBox, isIBox });
       continue;
     }
