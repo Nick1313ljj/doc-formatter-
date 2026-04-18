@@ -544,15 +544,31 @@ async function runOCR() {
 
   const prompt = `You are an OCR extraction engine for lottery ticket images.
 
+CRITICAL RULE — READ THIS FIRST:
+Every lottery number is EXACTLY 4 digits (0–9). Letters/alphabet NEVER appear inside a lottery number.
+If a character inside a 4-digit group looks like a letter, it IS a digit written in handwriting — decode it as the closest digit, NOT as a letter.
+
+Mandatory letter→digit substitutions (apply unconditionally inside 4-digit groups):
+  S or s → 5    (most common mistake)
+  Z or z → 2
+  I or l → 1
+  O (letter O) → 0
+  B → 8
+  G → 6
+  b → 6
+  W → 4 or 7 (pick whichever fits the shape better)
+  q → 9
+  g → 9
+
 STRICT RULES:
 1. Extract ALL text exactly as shown. Do NOT explain, analyze, or add any extra words.
-2. Each lottery number is exactly 4 digits. Read each digit carefully one by one.
-3. Common handwriting confusion to watch for:
+2. Each lottery number group = exactly 4 digits. Apply the letter→digit table above before outputting.
+3. Additional handwriting confusion to watch for:
    - 0 (zero) vs 6: zero is fully closed circle, 6 has a tail at top
-   - 1 vs 7: 1 is straight, 7 has a horizontal bar at top
+   - 1 vs 7: 1 is straight, 7 has a horizontal crossbar at top
    - 3 vs 8: 3 is open on left, 8 is fully closed
-   - 2 vs 7: different top shape
-   - 9 vs 4: 9 has closed loop, 4 has open angle
+   - 5 vs S: always output 5
+   - 2 vs Z: always output 2
 4. Replace「·」or「-」(digit separators) with「#」
 5. If a line contains BOX or bbox or b box → add * prefix to that line
 6. Output each number on its own line. No numbering, no labels, no extra text.
