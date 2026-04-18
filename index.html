@@ -140,10 +140,11 @@
 <!-- API Key (only shown for Format 1) -->
 <div class="api-section" id="apiSection">
   <!-- Engine selector -->
-  <div style="display:flex;gap:6px;margin-bottom:10px">
+  <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
     <button id="engineClaude" class="hbtn" onclick="selectEngine('claude')"
       style="color:var(--accent);border-color:var(--accent);background:var(--accent-dim)">Claude Haiku</button>
     <button id="engineGemini" class="hbtn" onclick="selectEngine('gemini')">Gemini</button>
+    <button id="engineDoubao" class="hbtn" onclick="selectEngine('doubao')">豆包视觉</button>
   </div>
   <!-- Claude key row -->
   <div class="api-row" id="claudeRow">
@@ -158,6 +159,13 @@
     <input class="api-input" type="password" id="geminiKey" placeholder="AIza..." oninput="saveGeminiKey()" />
     <button class="hbtn" onclick="testGeminiAPI()">测试</button>
     <button class="hbtn" onclick="toggleApiVis('geminiKey', this)">显示</button>
+  </div>
+  <!-- Doubao key row -->
+  <div class="api-row" id="doubaoRow" style="display:none">
+    <span class="api-label">豆包 API Key</span>
+    <input class="api-input" type="password" id="doubaoKey" placeholder="Ark API Key..." oninput="saveDoubaoKey()" />
+    <button class="hbtn" onclick="testDoubaoAPI()">测试</button>
+    <button class="hbtn" onclick="toggleApiVis('doubaoKey', this)">显示</button>
   </div>
   <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px">API Key 已自动保存到本机，下次无需重新输入</div>
 </div>
@@ -339,21 +347,23 @@ let currentEngine = 'claude';
 
 function selectEngine(engine) {
   currentEngine = engine;
-  document.getElementById('claudeRow').style.display  = engine === 'claude' ? 'flex' : 'none';
-  document.getElementById('geminiRow').style.display  = engine === 'gemini' ? 'flex' : 'none';
+  document.getElementById('claudeRow').style.display  = engine === 'claude'  ? 'flex' : 'none';
+  document.getElementById('geminiRow').style.display  = engine === 'gemini'  ? 'flex' : 'none';
+  document.getElementById('doubaoRow').style.display  = engine === 'doubao'  ? 'flex' : 'none';
   const cBtn = document.getElementById('engineClaude');
   const gBtn = document.getElementById('engineGemini');
-  if (engine === 'claude') {
-    cBtn.style.cssText = 'color:var(--accent);border-color:var(--accent);background:var(--accent-dim)';
-    gBtn.style.cssText = '';
-  } else {
-    gBtn.style.cssText = 'color:var(--blue);border-color:var(--blue);background:var(--blue-dim)';
-    cBtn.style.cssText = '';
-  }
+  const dBtn = document.getElementById('engineDoubao');
+  cBtn.style.cssText = '';
+  gBtn.style.cssText = '';
+  dBtn.style.cssText = '';
+  if (engine === 'claude')  cBtn.style.cssText = 'color:var(--accent);border-color:var(--accent);background:var(--accent-dim)';
+  if (engine === 'gemini')  gBtn.style.cssText = 'color:var(--blue);border-color:var(--blue);background:var(--blue-dim)';
+  if (engine === 'doubao')  dBtn.style.cssText = 'color:#e65c00;border-color:#e65c00;background:#fff3ec';
 }
 
 function getKey() { return document.getElementById('apiKey').value.trim(); }
 function getGeminiKey() { return document.getElementById('geminiKey').value.trim(); }
+function getDoubaoKey() { return document.getElementById('doubaoKey').value.trim(); }
 
 function saveApiKey() {
   const key = getKey();
@@ -363,12 +373,18 @@ function saveGeminiKey() {
   const key = getGeminiKey();
   if (key) localStorage.setItem('gemini_api_key', key);
 }
+function saveDoubaoKey() {
+  const key = getDoubaoKey();
+  if (key) localStorage.setItem('doubao_api_key', key);
+}
 
 function loadApiKey() {
   const saved = localStorage.getItem('claude_api_key');
   if (saved) document.getElementById('apiKey').value = saved;
   const gm = localStorage.getItem('gemini_api_key');
   if (gm) document.getElementById('geminiKey').value = gm;
+  const db = localStorage.getItem('doubao_api_key');
+  if (db) document.getElementById('doubaoKey').value = db;
 }
 
 function toggleApiVis(id, btn) {
@@ -482,6 +498,46 @@ async function callGemini(key, prompt, imageBase64) {
   return data.candidates[0].content.parts[0].text;
 }
 
+// DOUBAO (豆包) API CALL — Ark V3, OpenAI-compatible
+async function callDoubao(key, prompt, imageBase64) {
+  const messages = [{
+    role: 'user',
+    content: imageBase64
+      ? [
+          { type: 'image_url', image_url: { url: `data:${imageBase64.type};base64,${imageBase64.data}` } },
+          { type: 'text', text: prompt }
+        ]
+      : [{ type: 'text', text: prompt }]
+  }];
+  let res;
+  try {
+    res = await fetch('https://ark.cn-beijing.volces.com/api/v3/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({ model: 'doubao-seed-vision', messages, max_tokens: 2048 })
+    });
+  } catch(netErr) {
+    throw new Error('网络错误：无法连接豆包 API，请检查网络。');
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    throw new Error(err.error?.message || res.statusText);
+  }
+  const data = await res.json();
+  return data.choices[0].message.content;
+}
+
+async function testDoubaoAPI() {
+  const key = getDoubaoKey();
+  if (!key) { showToast('请先输入豆包 API Key'); return; }
+  try {
+    await callDoubao(key, 'Reply "OK" only.', null);
+    showToast('豆包 API Key 有效 ✓');
+  } catch(e) {
+    showToast('豆包测试失败: ' + e.message);
+  }
+}
+
 // ════════════════════════════════
 // FORMAT 0 — OCR 文字提取
 // ════════════════════════════════
@@ -531,8 +587,9 @@ function onImageSelected(e) {
 
 async function runOCR() {
   if (!selectedImage) { showToast('请先上传图片'); return; }
-  const key = currentEngine === 'gemini' ? getGeminiKey() : getKey();
-  if (!key) { showToast(`请先输入 ${currentEngine === 'gemini' ? 'Gemini' : 'Claude'} API Key`); return; }
+  const key = currentEngine === 'gemini' ? getGeminiKey() : currentEngine === 'doubao' ? getDoubaoKey() : getKey();
+  const engineName = currentEngine === 'gemini' ? 'Gemini' : currentEngine === 'doubao' ? '豆包' : 'Claude';
+  if (!key) { showToast(`请先输入 ${engineName} API Key`); return; }
 
   const btn = document.getElementById('ocrBtn');
   const spinner = document.getElementById('ocrSpinner');
@@ -562,9 +619,9 @@ STRICT RULES:
 ONLY output the final extracted text.`;
 
   try {
-    const result = currentEngine === 'gemini'
-      ? await callGemini(key, prompt, selectedImage)
-      : await callClaude(key, prompt, selectedImage);
+    const result = currentEngine === 'gemini'  ? await callGemini(key, prompt, selectedImage)
+                 : currentEngine === 'doubao'  ? await callDoubao(key, prompt, selectedImage)
+                 : await callClaude(key, prompt, selectedImage);
     document.getElementById('output0').textContent = result;
   } catch(e) {
     document.getElementById('output0').textContent = '识别失败: ' + e.message;
