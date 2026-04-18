@@ -1337,6 +1337,9 @@ function processL3N3(raw) {
 
     const trimmed = line.trim();
 
+    // Skip (TT) line
+    if (/^\(TT\)$/i.test(trimmed)) continue;
+
     // Date line: DD/MM → {MMDD}
     const dateMatch = trimmed.match(/^(\d{2})\/(\d{2})$/);
     if (dateMatch) {
