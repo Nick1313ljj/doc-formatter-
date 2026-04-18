@@ -1253,10 +1253,19 @@ function processSaraBlock(raw, available) {
   const stripWA = l => l.replace(/^\[\d{1,2}\/\d{1,2},\s*\d{1,2}:\d{2}(?:\s*[AP]M)?\]\s*[^:]+:\s*/i, '').trim();
   const lines = raw.split('\n').map(l => stripWA(l)).filter(l => l.length > 0);
 
-  let rawLetters = []; // letters from input before filtering
-  const betEntries = []; // {prefix, num, big, small, a1}
+  // Support multiple company sections within one block
+  const sections = []; // [{letters, entries}]
+  let curLetters = [];
+  let curEntries = [];
   let pastGT = false;
   let lastBig = 1, lastSmall = 0, lastA1 = 0;
+
+  const flushSection = () => {
+    if (curEntries.length > 0) {
+      sections.push({ letters: [...curLetters], entries: curEntries });
+      curEntries = [];
+    }
+  };
 
   for (const line of lines) {
     if (/^GT\s*=/i.test(line)) { pastGT = true; continue; }
@@ -1280,12 +1289,15 @@ function processSaraBlock(raw, available) {
     if (compMatch) {
       const letters = compMatch[1].toUpperCase().split('');
       if (letters.every(l => SARA_LETTERS.has(l))) {
-        rawLetters = letters;
+        // Flush current section before starting new company
+        flushSection();
+        curLetters = letters;
+        lastBig = 1; lastSmall = 0; lastA1 = 0;
         continue;
       }
     }
 
-    // Bet line: NNNN#5#2#1# or NNNN#3# (# separated amounts, trailing # optional)
+    // Bet line: NNNN#5#2#1# or NNNN#3#
     const hashBetMatch = line.match(/^(\*{0,2})(\d{4})((?:#\d+(?:\.\d+)?)+)#?$/);
     if (hashBetMatch) {
       const prefix = hashBetMatch[1];
@@ -1296,67 +1308,64 @@ function processSaraBlock(raw, available) {
       lastA1    = vals[2] !== undefined ? vals[2] : 0;
       const isIBox = prefix === '**';
       const isBox  = prefix === '*';
-      betEntries.push({ prefix, num, big: lastBig, small: lastSmall, a1: lastA1, isBox, isIBox });
+      curEntries.push({ prefix, num, big: lastBig, small: lastSmall, a1: lastA1, isBox, isIBox });
       continue;
     }
 
-    // Bet line: NNNN=amounts OR NNNN-amounts (e.g. 5649-5B-5S-5A1)
+    // Bet line: NNNN=amounts OR NNNN-amounts
     const betMatch = line.match(/^(\d{4})\s*[=\-]\s*(.+)$/);
     if (betMatch) {
       const num = betMatch[1];
-      // Normalize: replace - between amount tokens with space for easier parsing
       const rest = betMatch[2].replace(/-(?=[0-9])/g, ' ');
       const isIBox = /ibox/i.test(rest);
       const isBox  = /\bbox\b/i.test(rest) && !isIBox;
       const bM = rest.match(/(\d+(?:\.\d+)?)\s*B(?!ox)/i);
       const sM = rest.match(/(\d+(?:\.\d+)?)\s*S(?!A)/i);
       const aM = rest.match(/(\d+(?:\.\d+)?)\s*A1?(?!\d)/i);
-      // If no B/S/A suffix at all, plain number = big
-      const plainNum = (!bM && !sM && !aM) ? rest.match(/^(\d+(?:\.\d+)?)$/) : null;
+      // Strip box/ibox keywords then try plain number
+      const restClean = rest.replace(/ibox|bbox/gi, '').trim();
+      const plainNum = (!bM && !sM && !aM) ? restClean.match(/^(\d+(?:\.\d+)?)$/) : null;
       lastBig   = bM ? parseFloat(bM[1]) : (plainNum ? parseFloat(plainNum[1]) : 0);
       lastSmall = sM ? parseFloat(sM[1]) : 0;
       lastA1    = aM ? parseFloat(aM[1]) : 0;
-      betEntries.push({ prefix: isIBox ? '**' : isBox ? '*' : '', num, big: lastBig, small: lastSmall, a1: lastA1, isBox, isIBox });
+      curEntries.push({ prefix: isIBox ? '**' : isBox ? '*' : '', num, big: lastBig, small: lastSmall, a1: lastA1, isBox, isIBox });
       continue;
     }
 
     // Bare 4-digit
     const bareMatch = line.match(/^(\d{4})$/);
     if (bareMatch) {
-      betEntries.push({ prefix: '', num: bareMatch[1], big: lastBig, small: lastSmall, a1: lastA1, isBox: false, isIBox: false });
+      curEntries.push({ prefix: '', num: bareMatch[1], big: lastBig, small: lastSmall, a1: lastA1, isBox: false, isIBox: false });
       continue;
     }
   }
 
-  if (!betEntries.length && !rawLetters.length) return { text: null, total: 0 };
+  // Flush last section
+  flushSection();
 
-  // Filter letters by today's availability
-  const filteredLetters = rawLetters.filter(l => available.has(l));
-  const sides = filteredLetters.length || 1; // default 1 side if no header
+  if (!sections.length) return { text: null, total: 0 };
 
-  // Build header
-  const header = filteredLetters.length ? '#' + filteredLetters.map(l => SARA_MAP[l]).join('') : '';
-
-  // Build bet lines and calculate total
   const outLines = [];
   let blockTotal = 0;
 
-  for (const e of betEntries) {
-    outLines.push(`${e.prefix}${e.num}#${fmtSara(e.big)}#${fmtSara(e.small)}#${fmtSara(e.a1)}`);
-    const base = e.big + e.small + e.a1;
-    let cost;
-    if (e.isIBox) {
-      cost = base * sides; // IBox: amount is already the total, just multiply by sides
-    } else if (e.isBox) {
-      cost = base * boxPerms(e.num) * sides;
-    } else {
-      cost = base * sides;
+  for (const sec of sections) {
+    const filteredLetters = sec.letters.filter(l => available.has(l));
+    const sides = filteredLetters.length || 1;
+    const header = filteredLetters.length ? '#' + filteredLetters.map(l => SARA_MAP[l]).join('') : '';
+    if (header) outLines.push(header);
+
+    for (const e of sec.entries) {
+      outLines.push(`${e.prefix}${e.num}#${fmtSara(e.big)}#${fmtSara(e.small)}#${fmtSara(e.a1)}`);
+      const base = e.big + e.small + e.a1;
+      let cost;
+      if (e.isIBox) cost = base * sides;
+      else if (e.isBox) cost = base * boxPerms(e.num) * sides;
+      else cost = base * sides;
+      blockTotal += cost;
     }
-    blockTotal += cost;
   }
 
-  const text = (header ? header + '\n' : '') + outLines.join('\n');
-  return { text, total: blockTotal };
+  return { text: outLines.join('\n'), total: blockTotal };
 }
 
 function fmtSara(n) {
