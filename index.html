@@ -342,18 +342,35 @@
     <div class="sec-label">输出结果</div>
     <div id="output6Container" style="display:none;margin-bottom:12px">
       <div id="output6Preview" style="background:#fff;border:1px solid var(--border);padding:20px;border-radius:4px;font-family:var(--mono);font-size:14px">
+        <div style="margin-bottom:20px">
+          <div style="font-weight:700;margin-bottom:16px;font-size:14px">从<span id="xfDateDisplay">—</span>的账目</div>
+        </div>
         <div style="display:flex;justify-content:space-between;gap:40px;margin-bottom:20px">
           <!-- MYR 列 -->
-          <div style="flex:1;text-align:right">
-            <div style="font-weight:700;margin-bottom:12px;font-size:16px;color:#2563eb">RM</div>
-            <div id="xfTableRM" style="line-height:2;margin-bottom:12px;border-bottom:2px solid #000;padding-bottom:8px"></div>
-            <div style="font-weight:700;font-size:15px"><span id="rmTotal">—</span></div>
+          <div style="flex:1">
+            <div style="font-weight:700;margin-bottom:12px;font-size:16px;color:#2563eb;text-align:right">RM</div>
+            <div id="xfTableRM" style="line-height:2;text-align:right"></div>
           </div>
           <!-- SGD 列 -->
-          <div style="flex:1;text-align:right">
-            <div style="font-weight:700;margin-bottom:12px;font-size:16px;color:#059669">SGD</div>
-            <div id="xfTableSGD" style="line-height:2;margin-bottom:12px;border-bottom:2px solid #000;padding-bottom:8px"></div>
-            <div style="font-weight:700;font-size:15px"><span id="sgdTotal">—</span></div>
+          <div style="flex:1">
+            <div style="font-weight:700;margin-bottom:12px;font-size:16px;color:#059669;text-align:right">SGD</div>
+            <div id="xfTableSGD" style="line-height:2;text-align:right"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:40px;margin-bottom:12px">
+          <div style="flex:1">
+            <div style="border-bottom:2px solid #000;padding-bottom:8px;text-align:right;width:60%"></div>
+          </div>
+          <div style="flex:1">
+            <div style="border-bottom:2px solid #000;padding-bottom:8px;text-align:right;width:60%"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:40px">
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:15px;text-align:right"><span id="rmTotal">—</span></div>
+          </div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:15px;text-align:right"><span id="sgdTotal">—</span></div>
           </div>
         </div>
       </div>
@@ -1819,6 +1836,7 @@ function runFormat6() {
     document.getElementById('xfTableSGD').innerHTML = sgdHTML;
     document.getElementById('rmTotal').textContent = formatAligned(myrTotal);
     document.getElementById('sgdTotal').textContent = formatAligned(sgdTotal);
+    document.getElementById('xfDateDisplay').textContent = `${dateFromFormatted}到${dateToFormatted}`;
     document.getElementById('output6Container').style.display = 'block';
     document.getElementById('output6Message').style.display = 'none';
 
@@ -1861,7 +1879,7 @@ async function copyXFImage() {
       const dateFrom = window.xfDateFrom || '';
       const dateTo = window.xfDateTo || '';
 
-      let text = `从${dateFrom}到${dateTo}的账目\nAccount from ${dateFrom} to ${dateTo}\n\n`;
+      let text = `从${dateFrom}到${dateTo}的账目\n\n`;
       text += 'RM' + ' '.repeat(20) + 'SGD\n';
       const maxLen = Math.max(rmLines.length, sgdLines.length);
       for (let i = 0; i < maxLen; i++) {
@@ -1896,7 +1914,7 @@ function shareXFWhatsApp() {
   const dateFrom = window.xfDateFrom || '';
   const dateTo = window.xfDateTo || '';
 
-  let text = `从${dateFrom}到${dateTo}的账目\nAccount from ${dateFrom} to ${dateTo}\n\n`;
+  let text = `从${dateFrom}到${dateTo}的账目\n\n`;
   text += 'RM'.padEnd(20) + 'SGD\n';
   const maxLen = Math.max(rmLines.length, sgdLines.length);
   for (let i = 0; i < maxLen; i++) {
