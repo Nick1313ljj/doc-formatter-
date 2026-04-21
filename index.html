@@ -341,9 +341,9 @@
   <div class="section">
     <div class="sec-label">输出结果</div>
     <div id="output6Container" style="display:none;margin-bottom:12px">
-      <div id="output6Preview" style="background:#fff;border:1px solid var(--border);padding:20px;border-radius:4px;font-family:var(--mono);font-size:14px">
+      <div id="output6Preview" style="background:#fffacd;border:1px solid var(--border);padding:20px;border-radius:4px;font-family:var(--mono);font-size:14px">
         <div style="margin-bottom:20px">
-          <div style="font-weight:700;margin-bottom:16px;font-size:14px">从<span id="xfDateDisplay">—</span>的账目</div>
+          <div style="font-weight:700;margin-bottom:16px;font-size:14px;color:#1a1a1a">从<span id="xfDateDisplay">—</span>的账目</div>
         </div>
         <div style="display:flex;justify-content:space-between;gap:40px;margin-bottom:20px">
           <!-- MYR 列 -->
@@ -367,16 +367,17 @@
         </div>
         <div style="display:flex;justify-content:space-between;gap:40px">
           <div style="flex:1">
-            <div style="font-weight:700;font-size:15px;text-align:right"><span id="rmTotal">—</span></div>
+            <div style="font-weight:700;font-size:15px;text-align:right;color:#000"><span id="rmTotal">—</span></div>
           </div>
           <div style="flex:1">
-            <div style="font-weight:700;font-size:15px;text-align:right"><span id="sgdTotal">—</span></div>
+            <div style="font-weight:700;font-size:15px;text-align:right;color:#000"><span id="sgdTotal">—</span></div>
           </div>
         </div>
       </div>
       <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-go" onclick="copyXFImage()" style="background:var(--accent)">📋 复制图片</button>
-        <button class="btn btn-go" onclick="shareXFWhatsApp()" style="background:#25d366">📱 分享WhatsApp</button>
+        <button class="btn btn-go" onclick="shareXFImageToWA()" style="background:#25d366">📷 分享图片</button>
+        <button class="btn btn-go" onclick="shareXFWhatsApp()" style="background:#007bff">💬 分享文本</button>
       </div>
     </div>
     <div id="output6Message" style="text-align:center;color:var(--muted);padding:20px">—</div>
@@ -1927,6 +1928,50 @@ function shareXFWhatsApp() {
 
   const encodedText = encodeURIComponent(text);
   window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+}
+
+async function shareXFImageToWA() {
+  const element = document.getElementById('output6Preview');
+  if (!element) { showToast('无内容可分享'); return; }
+
+  try {
+    // 检查是否有 html2canvas
+    if (typeof html2canvas === 'undefined') {
+      showToast('需要加载图片库，请先使用「复制图片」功能，然后粘贴到WhatsApp');
+      return;
+    }
+
+    // 生成图片
+    const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#fffacd' });
+    canvas.toBlob(async blob => {
+      // 尝试使用 Web Share API
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            files: [new File([blob], 'account-report.png', { type: 'image/png' })],
+            title: '账目报表'
+          });
+          showToast('已分享');
+          return;
+        } catch(err) {
+          if (err.name !== 'AbortError') {
+            console.log('分享失败:', err);
+          }
+        }
+      }
+
+      // 备选方案：复制到剪贴板后打开WhatsApp
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showToast('图片已复制，正在打开WhatsApp...');
+        window.open('https://wa.me/', '_blank');
+      } catch(clipErr) {
+        showToast('分享失败: ' + clipErr.message);
+      }
+    });
+  } catch(e) {
+    showToast('生成图片失败: ' + e.message);
+  }
 }
 
 // Init
