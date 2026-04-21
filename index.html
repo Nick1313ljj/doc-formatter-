@@ -1749,6 +1749,19 @@ function runFormat6() {
   if (!input) { showToast('请输入报表文本'); return; }
 
   try {
+    // 提取日期
+    const dateFromMatch = input.match(/Date From\s*:\s*(\d{4}-\d{2}-\d{2})/);
+    const dateToMatch = input.match(/Date To\s*:\s*(\d{4}-\d{2}-\d{2})/);
+    let dateFromFormatted = '';
+    let dateToFormatted = '';
+
+    if (dateFromMatch && dateToMatch) {
+      const [yf, mf, df] = dateFromMatch[1].split('-');
+      const [yt, mt, dt] = dateToMatch[1].split('-');
+      dateFromFormatted = `${df}/${mf}/${yf.slice(-2)}`;
+      dateToFormatted = `${dt}/${mt}/${yt.slice(-2)}`;
+    }
+
     // 提取 MYR 部分各项 Total Net
     const myrMPTSKBW = extractTotalNet(input, 'MYR', 'MPTSKBW');
     const myrH = extractTotalNet(input, 'MYR', 'H');
@@ -1776,16 +1789,27 @@ function runFormat6() {
       return;
     }
 
+    // 格式化数字（小数点对齐）
+    const allVals = [...myrItems.map(x => x.val), ...sgdItems.map(x => x.val)];
+    const maxIntLen = Math.max(...allVals.map(v => Math.floor(v).toString().length));
+
+    function formatAligned(val) {
+      const str = val.toFixed(2);
+      const [intPart, decPart] = str.split('.');
+      const padding = ' '.repeat(Math.max(0, maxIntLen - intPart.length));
+      return padding + intPart + '.' + decPart;
+    }
+
     // 生成 MYR 表格
     let myrHTML = '';
     myrItems.forEach(item => {
-      myrHTML += `<div>${item.val.toFixed(2)}</div>`;
+      myrHTML += `<div>${formatAligned(item.val)}</div>`;
     });
 
     // 生成 SGD 表格
     let sgdHTML = '';
     sgdItems.forEach(item => {
-      sgdHTML += `<div>${item.val.toFixed(2)}</div>`;
+      sgdHTML += `<div>${formatAligned(item.val)}</div>`;
     });
 
     const myrTotal = myrItems.reduce((sum, x) => sum + x.val, 0);
@@ -1793,10 +1817,15 @@ function runFormat6() {
 
     document.getElementById('xfTableRM').innerHTML = myrHTML;
     document.getElementById('xfTableSGD').innerHTML = sgdHTML;
-    document.getElementById('rmTotal').textContent = myrTotal.toFixed(2);
-    document.getElementById('sgdTotal').textContent = sgdTotal.toFixed(2);
+    document.getElementById('rmTotal').textContent = formatAligned(myrTotal);
+    document.getElementById('sgdTotal').textContent = formatAligned(sgdTotal);
     document.getElementById('output6Container').style.display = 'block';
     document.getElementById('output6Message').style.display = 'none';
+
+    // 保存日期供 share 函数使用
+    window.xfDateFrom = dateFromFormatted;
+    window.xfDateTo = dateToFormatted;
+
     showToast('生成成功');
   } catch(e) {
     showToast('处理失败: ' + e.message);
@@ -1829,7 +1858,11 @@ async function copyXFImage() {
       const rmTotal = document.getElementById('rmTotal').textContent;
       const sgdTotal = document.getElementById('sgdTotal').textContent;
 
-      let text = 'RM' + ' '.repeat(20) + 'SGD\n';
+      const dateFrom = window.xfDateFrom || '';
+      const dateTo = window.xfDateTo || '';
+
+      let text = `从${dateFrom}到${dateTo}的账目\nAccount from ${dateFrom} to ${dateTo}\n\n`;
+      text += 'RM' + ' '.repeat(20) + 'SGD\n';
       const maxLen = Math.max(rmLines.length, sgdLines.length);
       for (let i = 0; i < maxLen; i++) {
         const rm = rmLines[i] || '';
@@ -1860,7 +1893,10 @@ function shareXFWhatsApp() {
   const rmTotal = document.getElementById('rmTotal').textContent;
   const sgdTotal = document.getElementById('sgdTotal').textContent;
 
-  let text = 'RM vs SGD Comparison\n\n';
+  const dateFrom = window.xfDateFrom || '';
+  const dateTo = window.xfDateTo || '';
+
+  let text = `从${dateFrom}到${dateTo}的账目\nAccount from ${dateFrom} to ${dateTo}\n\n`;
   text += 'RM'.padEnd(20) + 'SGD\n';
   const maxLen = Math.max(rmLines.length, sgdLines.length);
   for (let i = 0; i < maxLen; i++) {
