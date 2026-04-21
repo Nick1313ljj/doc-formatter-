@@ -1851,9 +1851,9 @@ function runFormat6() {
 }
 
 function extractTotalNet(text, currency, company) {
-  // 格式: "MYR : MPTSKBW\nTotal Sales  :   1,289.60\n...\nTotal Net    :     824.99"
+  // 格式: "MYR : MPTSKBW\nTotal Sales  :   1,289.60\n...\nTotal Net    :     824.99" 或负数
   const pattern = new RegExp(
-    `${currency}\\s*:\\s*${company}.*?Total Net\\s*:\\s*([\\d,\\.]+)`,
+    `${currency}\\s*:\\s*${company}.*?Total Net\\s*:\\s*(-?[\\d,\\.]+)`,
     's'
   );
   const match = text.match(pattern);
