@@ -341,16 +341,19 @@
   <div class="section">
     <div class="sec-label">输出结果</div>
     <div id="output6Container" style="display:none;margin-bottom:12px">
-      <div id="output6Preview" style="background:#fff;border:1px solid var(--border);padding:16px;border-radius:4px;font-family:var(--mono);font-size:13px;text-align:center">
-        <div style="margin-bottom:16px">
-          <div style="display:flex;justify-content:space-around;margin-bottom:8px;font-weight:600">
-            <div style="flex:1">RM</div>
-            <div style="flex:1">SGD</div>
+      <div id="output6Preview" style="background:#fff;border:1px solid var(--border);padding:20px;border-radius:4px;font-family:var(--mono);font-size:14px">
+        <div style="display:flex;justify-content:space-between;gap:40px;margin-bottom:20px">
+          <!-- MYR 列 -->
+          <div style="flex:1;text-align:right">
+            <div style="font-weight:700;margin-bottom:12px;font-size:16px;color:#2563eb">RM</div>
+            <div id="xfTableRM" style="line-height:2;margin-bottom:12px;border-bottom:2px solid #000;padding-bottom:8px"></div>
+            <div style="font-weight:700;font-size:15px"><span id="rmTotal">—</span></div>
           </div>
-          <div id="xfTable" style="line-height:1.8"></div>
-          <div style="margin-top:12px;border-top:2px solid #000;padding-top:8px;display:flex;justify-content:space-around;font-weight:600">
-            <div style="flex:1"><span id="rmTotal">—</span></div>
-            <div style="flex:1"><span id="sgdTotal">—</span></div>
+          <!-- SGD 列 -->
+          <div style="flex:1;text-align:right">
+            <div style="font-weight:700;margin-bottom:12px;font-size:16px;color:#059669">SGD</div>
+            <div id="xfTableSGD" style="line-height:2;margin-bottom:12px;border-bottom:2px solid #000;padding-bottom:8px"></div>
+            <div style="font-weight:700;font-size:15px"><span id="sgdTotal">—</span></div>
           </div>
         </div>
       </div>
@@ -1773,22 +1776,23 @@ function runFormat6() {
       return;
     }
 
-    // 生成表格
-    let tableHTML = '';
-    const maxLen = Math.max(myrItems.length, sgdItems.length);
-    for (let i = 0; i < maxLen; i++) {
-      const myrVal = myrItems[i] ? myrItems[i].val.toFixed(2) : '';
-      const sgdVal = sgdItems[i] ? sgdItems[i].val.toFixed(2) : '';
-      tableHTML += `<div style="display:flex;justify-content:space-around;margin-bottom:4px">
-        <div style="flex:1;text-align:center">${myrVal}</div>
-        <div style="flex:1;text-align:center">${sgdVal}</div>
-      </div>`;
-    }
+    // 生成 MYR 表格
+    let myrHTML = '';
+    myrItems.forEach(item => {
+      myrHTML += `<div>${item.val.toFixed(2)}</div>`;
+    });
+
+    // 生成 SGD 表格
+    let sgdHTML = '';
+    sgdItems.forEach(item => {
+      sgdHTML += `<div>${item.val.toFixed(2)}</div>`;
+    });
 
     const myrTotal = myrItems.reduce((sum, x) => sum + x.val, 0);
     const sgdTotal = sgdItems.reduce((sum, x) => sum + x.val, 0);
 
-    document.getElementById('xfTable').innerHTML = tableHTML;
+    document.getElementById('xfTableRM').innerHTML = myrHTML;
+    document.getElementById('xfTableSGD').innerHTML = sgdHTML;
     document.getElementById('rmTotal').textContent = myrTotal.toFixed(2);
     document.getElementById('sgdTotal').textContent = sgdTotal.toFixed(2);
     document.getElementById('output6Container').style.display = 'block';
@@ -1820,10 +1824,21 @@ async function copyXFImage() {
     // 使用 html2canvas 库
     if (typeof html2canvas === 'undefined') {
       // 降级：直接复制文本
+      const rmLines = document.getElementById('xfTableRM').innerText.split('\n').filter(x => x.trim());
+      const sgdLines = document.getElementById('xfTableSGD').innerText.split('\n').filter(x => x.trim());
       const rmTotal = document.getElementById('rmTotal').textContent;
       const sgdTotal = document.getElementById('sgdTotal').textContent;
-      const table = document.getElementById('xfTable').innerText;
-      const text = `RM          SGD\n${table}\n${rmTotal}    ${sgdTotal}`;
+
+      let text = 'RM' + ' '.repeat(20) + 'SGD\n';
+      const maxLen = Math.max(rmLines.length, sgdLines.length);
+      for (let i = 0; i < maxLen; i++) {
+        const rm = rmLines[i] || '';
+        const sgd = sgdLines[i] || '';
+        text += rm.padEnd(20) + sgd + '\n';
+      }
+      text += '─'.repeat(20) + '─'.repeat(15) + '\n';
+      text += rmTotal.padEnd(20) + sgdTotal;
+
       await navigator.clipboard.writeText(text);
       showToast('已复制文本');
       return;
@@ -1840,22 +1855,21 @@ async function copyXFImage() {
 }
 
 function shareXFWhatsApp() {
+  const rmLines = document.getElementById('xfTableRM').innerText.split('\n').filter(x => x.trim());
+  const sgdLines = document.getElementById('xfTableSGD').innerText.split('\n').filter(x => x.trim());
   const rmTotal = document.getElementById('rmTotal').textContent;
   const sgdTotal = document.getElementById('sgdTotal').textContent;
-  const tableHTML = document.getElementById('xfTable').innerHTML;
 
-  // 提取表格内容
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = tableHTML;
-  const rows = tempDiv.querySelectorAll('[style*="display:flex"]');
-  let text = 'RM 与 SGD 对比\\n\\nRM          SGD\\n';
-  rows.forEach(row => {
-    const cells = row.querySelectorAll('[style*="flex:1"]');
-    if (cells.length === 2) {
-      text += cells[0].textContent + '      ' + cells[1].textContent + '\\n';
-    }
-  });
-  text += '________________\\n' + rmTotal + '      ' + sgdTotal;
+  let text = 'RM vs SGD Comparison\n\n';
+  text += 'RM'.padEnd(20) + 'SGD\n';
+  const maxLen = Math.max(rmLines.length, sgdLines.length);
+  for (let i = 0; i < maxLen; i++) {
+    const rm = rmLines[i] || '';
+    const sgd = sgdLines[i] || '';
+    text += rm.padEnd(20) + sgd + '\n';
+  }
+  text += '─'.repeat(20) + '─'.repeat(15) + '\n';
+  text += rmTotal.padEnd(20) + sgdTotal;
 
   const encodedText = encodeURIComponent(text);
   window.open(`https://wa.me/?text=${encodedText}`, '_blank');
