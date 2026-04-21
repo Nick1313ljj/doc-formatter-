@@ -178,6 +178,7 @@
   <button class="tab" onclick="switchTab(3)">④ ABC</button>
   <button class="tab" onclick="switchTab(4)">⑤ 沙拉吉她</button>
   <button class="tab" onclick="switchTab(5)">⑥ l3n3</button>
+  <button class="tab" onclick="switchTab(6)">⑦ XF</button>
 </div>
 
 <!-- ══ Panel 0: 文字提取 (OCR) ══ -->
@@ -323,6 +324,42 @@
       <button class="btn" onclick="printOutput5()"
         style="background:var(--purple);color:#fff;font-size:11px;padding:8px 18px">🖨 打印</button>
     </div>
+  </div>
+</div>
+
+<!-- ══ Panel 6: XF ══ -->
+<div class="panel" id="panel6">
+  <div class="section">
+    <div class="sec-label">输入报表文本</div>
+    <textarea id="input6" placeholder="粘贴整个报表内容（包含 MYR 和 SGD 部分）..." style="min-height:240px"></textarea>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-go" onclick="runFormat6()">▶ 生成对比</button>
+      <button class="hbtn" onclick="document.getElementById('input6').value=''">✕ 清空</button>
+      <button class="hbtn blue" onclick="pasteTo('input6')">📋 粘贴</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="sec-label">输出结果</div>
+    <div id="output6Container" style="display:none;margin-bottom:12px">
+      <div id="output6Preview" style="background:#fff;border:1px solid var(--border);padding:16px;border-radius:4px;font-family:var(--mono);font-size:13px;text-align:center">
+        <div style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-around;margin-bottom:8px;font-weight:600">
+            <div style="flex:1">RM</div>
+            <div style="flex:1">SGD</div>
+          </div>
+          <div id="xfTable" style="line-height:1.8"></div>
+          <div style="margin-top:12px;border-top:2px solid #000;padding-top:8px;display:flex;justify-content:space-around;font-weight:600">
+            <div style="flex:1"><span id="rmTotal">—</span></div>
+            <div style="flex:1"><span id="sgdTotal">—</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-go" onclick="copyXFImage()" style="background:var(--accent)">📋 复制图片</button>
+        <button class="btn btn-go" onclick="shareXFWhatsApp()" style="background:#25d366">📱 分享WhatsApp</button>
+      </div>
+    </div>
+    <div id="output6Message" style="text-align:center;color:var(--muted);padding:20px">—</div>
   </div>
 </div>
 
@@ -1698,6 +1735,130 @@ function printViaDialog(text) {
   }
   el.textContent = text;
   window.print();
+}
+
+// ════════════════════════════════
+// FORMAT 6 — XF 报表对比
+// ════════════════════════════════
+
+function runFormat6() {
+  const input = document.getElementById('input6').value.trim();
+  if (!input) { showToast('请输入报表文本'); return; }
+
+  try {
+    // 提取 MYR 部分各项 Total Net
+    const myrMPTSKBW = extractTotalNet(input, 'MYR', 'MPTSKBW');
+    const myrH = extractTotalNet(input, 'MYR', 'H');
+    const myrE = extractTotalNet(input, 'MYR', 'E');
+
+    // 提取 SGD 部分各项 Total Net
+    const sgdMPTSKBW = extractTotalNet(input, 'SGD', 'MPTSKBW');
+    const sgdH = extractTotalNet(input, 'SGD', 'H');
+    const sgdE = extractTotalNet(input, 'SGD', 'E');
+
+    const myrItems = [
+      { val: myrMPTSKBW, name: 'MPTSKBW' },
+      { val: myrH, name: 'H' },
+      { val: myrE, name: 'E' }
+    ].filter(x => x.val !== null);
+
+    const sgdItems = [
+      { val: sgdMPTSKBW, name: 'MPTSKBW' },
+      { val: sgdH, name: 'H' },
+      { val: sgdE, name: 'E' }
+    ].filter(x => x.val !== null);
+
+    if (myrItems.length === 0 && sgdItems.length === 0) {
+      showToast('无法提取数据，请检查格式');
+      return;
+    }
+
+    // 生成表格
+    let tableHTML = '';
+    const maxLen = Math.max(myrItems.length, sgdItems.length);
+    for (let i = 0; i < maxLen; i++) {
+      const myrVal = myrItems[i] ? myrItems[i].val.toFixed(2) : '';
+      const sgdVal = sgdItems[i] ? sgdItems[i].val.toFixed(2) : '';
+      tableHTML += `<div style="display:flex;justify-content:space-around;margin-bottom:4px">
+        <div style="flex:1;text-align:center">${myrVal}</div>
+        <div style="flex:1;text-align:center">${sgdVal}</div>
+      </div>`;
+    }
+
+    const myrTotal = myrItems.reduce((sum, x) => sum + x.val, 0);
+    const sgdTotal = sgdItems.reduce((sum, x) => sum + x.val, 0);
+
+    document.getElementById('xfTable').innerHTML = tableHTML;
+    document.getElementById('rmTotal').textContent = myrTotal.toFixed(2);
+    document.getElementById('sgdTotal').textContent = sgdTotal.toFixed(2);
+    document.getElementById('output6Container').style.display = 'block';
+    document.getElementById('output6Message').style.display = 'none';
+    showToast('生成成功');
+  } catch(e) {
+    showToast('处理失败: ' + e.message);
+  }
+}
+
+function extractTotalNet(text, currency, company) {
+  // 格式: "MYR : MPTSKBW\nTotal Sales  :   1,289.60\n...\nTotal Net    :     824.99"
+  const pattern = new RegExp(
+    `${currency}\\s*:\\s*${company}.*?Total Net\\s*:\\s*([\\d,\\.]+)`,
+    's'
+  );
+  const match = text.match(pattern);
+  if (match && match[1]) {
+    return parseFloat(match[1].replace(/,/g, ''));
+  }
+  return null;
+}
+
+async function copyXFImage() {
+  const element = document.getElementById('output6Preview');
+  if (!element) { showToast('无内容可复制'); return; }
+
+  try {
+    // 使用 html2canvas 库
+    if (typeof html2canvas === 'undefined') {
+      // 降级：直接复制文本
+      const rmTotal = document.getElementById('rmTotal').textContent;
+      const sgdTotal = document.getElementById('sgdTotal').textContent;
+      const table = document.getElementById('xfTable').innerText;
+      const text = `RM          SGD\n${table}\n${rmTotal}    ${sgdTotal}`;
+      await navigator.clipboard.writeText(text);
+      showToast('已复制文本');
+      return;
+    }
+
+    const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#fff' });
+    canvas.toBlob(blob => {
+      navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      showToast('图片已复制');
+    });
+  } catch(e) {
+    showToast('复制失败: ' + e.message);
+  }
+}
+
+function shareXFWhatsApp() {
+  const rmTotal = document.getElementById('rmTotal').textContent;
+  const sgdTotal = document.getElementById('sgdTotal').textContent;
+  const tableHTML = document.getElementById('xfTable').innerHTML;
+
+  // 提取表格内容
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = tableHTML;
+  const rows = tempDiv.querySelectorAll('[style*="display:flex"]');
+  let text = 'RM 与 SGD 对比\\n\\nRM          SGD\\n';
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('[style*="flex:1"]');
+    if (cells.length === 2) {
+      text += cells[0].textContent + '      ' + cells[1].textContent + '\\n';
+    }
+  });
+  text += '________________\\n' + rmTotal + '      ' + sgdTotal;
+
+  const encodedText = encodeURIComponent(text);
+  window.open(`https://wa.me/?text=${encodedText}`, '_blank');
 }
 
 // Init
