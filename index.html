@@ -376,7 +376,7 @@
       </div>
       <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-go" onclick="copyXFImage()" style="background:var(--accent)">📋 复制图片</button>
-        <button class="btn btn-go" onclick="shareXFImageToWA()" style="background:#25d366">📷 分享图片</button>
+        <button class="btn btn-go" onclick="downloadXFImage()" style="background:#25d366">📤 发送图片</button>
         <button class="btn btn-go" onclick="shareXFWhatsApp()" style="background:#007bff">💬 分享文本</button>
       </div>
     </div>
@@ -1930,44 +1930,34 @@ function shareXFWhatsApp() {
   window.open(`https://wa.me/?text=${encodedText}`, '_blank');
 }
 
-async function shareXFImageToWA() {
+async function downloadXFImage() {
   const element = document.getElementById('output6Preview');
-  if (!element) { showToast('无内容可分享'); return; }
+  if (!element) { showToast('无内容可下载'); return; }
 
   try {
     // 检查是否有 html2canvas
     if (typeof html2canvas === 'undefined') {
-      showToast('需要加载图片库，请先使用「复制图片」功能，然后粘贴到WhatsApp');
+      showToast('需要加载图片库，请刷新页面后重试');
       return;
     }
 
     // 生成图片
     const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#fffacd' });
-    canvas.toBlob(async blob => {
-      // 尝试使用 Web Share API
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            files: [new File([blob], 'account-report.png', { type: 'image/png' })],
-            title: '账目报表'
-          });
-          showToast('已分享');
-          return;
-        } catch(err) {
-          if (err.name !== 'AbortError') {
-            console.log('分享失败:', err);
-          }
-        }
-      }
+    const dateFrom = window.xfDateFrom || 'report';
+    const dateTo = window.xfDateTo || '';
+    const filename = `account-${dateFrom}-to-${dateTo}.png`;
 
-      // 备选方案：复制到剪贴板后打开WhatsApp
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        showToast('图片已复制，正在打开WhatsApp...');
-        window.open('https://wa.me/', '_blank');
-      } catch(clipErr) {
-        showToast('分享失败: ' + clipErr.message);
-      }
+    // 下载图片
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('图片已下载，可在WhatsApp中分享');
     });
   } catch(e) {
     showToast('生成图片失败: ' + e.message);
