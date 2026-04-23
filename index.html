@@ -573,7 +573,7 @@ async function callDoubao(key, prompt, imageBase64) {
     res = await fetch('https://ark.cn-beijing.volces.com/api/v3/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model: 'doubao-seed-2-0-pro-260215', messages, max_tokens: 2048 })
+      body: JSON.stringify({ model: 'doubao-embedding-vision-251215', messages, max_tokens: 2048 })
     });
   } catch(netErr) {
     throw new Error('网络错误：无法连接豆包 API，请检查网络。');
