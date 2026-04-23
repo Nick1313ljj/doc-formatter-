@@ -1933,7 +1933,7 @@ function shareXFWhatsApp() {
 
 async function downloadXFImage() {
   const element = document.getElementById('output6Preview');
-  if (!element) { showToast('无内容可下载'); return; }
+  if (!element) { showToast('无内容可分享'); return; }
 
   try {
     // 检查是否有 html2canvas
@@ -1948,17 +1948,39 @@ async function downloadXFImage() {
     const dateTo = window.xfDateTo || '';
     const filename = `account-${dateFrom}-to-${dateTo}.png`;
 
-    // 下载图片
-    canvas.toBlob(blob => {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast('图片已下载，可在WhatsApp中分享');
+    canvas.toBlob(async blob => {
+      // 尝试使用 Web Share API（移动设备优先）
+      if (navigator.share) {
+        try {
+          const file = new File([blob], filename, { type: 'image/png' });
+          await navigator.share({
+            files: [file],
+            title: '账目报表',
+            text: `从${dateFrom}到${dateTo}的账目报表`
+          });
+          showToast('已分享到WhatsApp');
+          return;
+        } catch(err) {
+          if (err.name !== 'AbortError') {
+            console.log('Share failed:', err);
+          }
+        }
+      }
+
+      // 备选：复制到剪贴板并提示用户手动分享
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showToast('图片已复制，请在WhatsApp中粘贴分享');
+        // 打开 WhatsApp
+        const ua = navigator.userAgent.toLowerCase();
+        if (ua.includes('android') || ua.includes('iphone') || ua.includes('ipad')) {
+          window.location.href = 'whatsapp://';
+        } else {
+          window.open('https://web.whatsapp.com/', '_blank');
+        }
+      } catch(clipErr) {
+        showToast('分享失败，请重试');
+      }
     });
   } catch(e) {
     showToast('生成图片失败: ' + e.message);
