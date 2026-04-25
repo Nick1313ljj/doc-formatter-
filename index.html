@@ -2181,19 +2181,20 @@ function parseLotteryData(text) {
 function parseTicketData(text) {
   const tickets = [];
   // 格式: "1234=10B" 或 "1234=10B/5S" 或 "1234=10B/5S/2A1"
-  // 或直接: "1234 10B 5S"
+  // 支持 (Box) 或 (IBox) 标记
 
   const lines = text.split('\n');
   for (let line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
-    // 尝试多种格式
-    // 格式1: "1234=10B/5S/2A1"
-    let match = trimmed.match(/([0-9]{4})\s*=\s*([A-Z0-9\\/]+)/i);
+    // 格式: "1234=10B/5S (Box)" 或 "1234=10B (IBox)" 等
+    let match = trimmed.match(/([0-9]{4})\s*=\s*([A-Z0-9\\/]+)(?:\s*\((Box|IBox)\))?/i);
     if (match) {
       const number = match[1];
       const parts = match[2].split('/');
+      const boxMarker = match[3] ? match[3].toUpperCase() : null;
+      const isBox = boxMarker === 'BOX' || boxMarker === 'IBOX';
 
       let big = 0, small = 0, a1 = 0;
       for (let part of parts) {
@@ -2208,7 +2209,7 @@ function parseTicketData(text) {
       }
 
       if (big || small || a1) {
-        tickets.push({ number, big, small, a1 });
+        tickets.push({ number, big, small, a1, isBox });
       }
     }
   }
@@ -2277,7 +2278,7 @@ async function checkWinning() {
   let winningResults = []; // 存储所有中奖结果
 
   for (let ticket of tickets) {
-    const { number, big, small, a1 } = ticket;
+    const { number, big, small, a1, isBox } = ticket;
 
     // 检查每个日期的数据
     for (let entry of db) {
@@ -2308,25 +2309,27 @@ async function checkWinning() {
             });
           }
 
-          // Box 匹配（检查所有排列）
-          const perms = generatePermutations(number);
-          for (let perm of perms) {
-            if (perm !== number && nums.includes(perm)) {
-              const betInfo = [];
-              if (big > 0) betInfo.push(`${big}B`);
-              if (small > 0) betInfo.push(`${small}S`);
-              if (a1 > 0) betInfo.push(`${a1}A1`);
+          // Box 匹配（仅当用户标记了 (Box) 或 (IBox) 时才检查所有排列）
+          if (isBox) {
+            const perms = generatePermutations(number);
+            for (let perm of perms) {
+              if (perm !== number && nums.includes(perm)) {
+                const betInfo = [];
+                if (big > 0) betInfo.push(`${big}B`);
+                if (small > 0) betInfo.push(`${small}S`);
+                if (a1 > 0) betInfo.push(`${a1}A1`);
 
-              winningResults.push({
-                winningNum: perm,  // 开彩号码
-                type,
-                level,
-                bet: betInfo.join('/'),
-                date: dateStr,
-                userNum: number,   // 用户的 Box 号
-                isBox: true
-              });
-              break; // 只记录一次 Box 匹配
+                winningResults.push({
+                  winningNum: perm,  // 开彩号码
+                  type,
+                  level,
+                  bet: betInfo.join('/'),
+                  date: dateStr,
+                  userNum: number,   // 用户的 Box 号
+                  isBox: true
+                });
+                break; // 只记录一次 Box 匹配
+              }
             }
           }
         }
