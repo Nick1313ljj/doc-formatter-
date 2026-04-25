@@ -2086,46 +2086,91 @@ function updateLotteryStatus() {
 function parseLotteryData(text) {
   const result = { date: null, data: { L3: {}, L: {}, N3: {}, N: {} } };
 
-  // 尝试提取日期（格式可能是 "2026-04-25" 或 "25/04/2026" 等）
-  const dateMatch = text.match(/(\d{4}[-\/]\d{2}[-\/]\d{2}|\d{2}[-\/]\d{2}[-\/]\d{4})/);
+  // 提取日期
+  const dateMatch = text.match(/(\d{4}[-\/]\d{2}[-\/]\d{2})/);
   if (dateMatch) {
     result.date = dateMatch[1];
   }
 
-  // 按类型提取号码（支持多种格式）
-  // 格式示例：
-  // Lucky 3:30PM (L3): 2345
-  // Lucky (L): 4567
-  // Perdana 3:30PM (N3): 6789
-  // Perdana (N): 8901
-
+  // 分割为行并处理
   const lines = text.split('\n');
   let currentType = null;
+  let currentSection = null; // 'prize' (1/2/3) 或 'S' 或 'C'
 
-  for (let line of lines) {
-    const trimmed = line.trim();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
 
-    // 检测类型
-    if (trimmed.match(/Lucky.*3.*30/i) || trimmed.match(/L3/i)) currentType = 'L3';
-    else if (trimmed.match(/Lucky/i) && !trimmed.match(/3.*30/i) && trimmed.match(/L[^3]/i)) currentType = 'L';
-    else if (trimmed.match(/Perdana.*3.*30/i) || trimmed.match(/N3/i)) currentType = 'N3';
-    else if (trimmed.match(/Perdana/i) && !trimmed.match(/3.*30/i) && trimmed.match(/N[^3]/i)) currentType = 'N';
+    // 检测类型（跳过6D）
+    if (line.match(/^Lucky\s+3.*30/i) && !line.match(/6D/i)) {
+      currentType = 'L3';
+      currentSection = 'prize';
+      continue;
+    } else if (line.match(/^Lucky\s*$/i) || (line.match(/^Lucky\s/) && !line.match(/3.*30/i) && !line.match(/6D/i))) {
+      currentType = 'L';
+      currentSection = 'prize';
+      continue;
+    } else if (line.match(/^Perdana\s+3.*30/i) && !line.match(/6D/i)) {
+      currentType = 'N3';
+      currentSection = 'prize';
+      continue;
+    } else if (line.match(/^Perdana\s*$/i) || (line.match(/^Perdana\s/) && !line.match(/3.*30/i) && !line.match(/6D/i))) {
+      currentType = 'N';
+      currentSection = 'prize';
+      continue;
+    }
 
-    // 提取奖项和号码（格式: "1st Prize: 1234" 或 "Prize 1: 1234" 等）
-    const prizeMatch = trimmed.match(/([1-3](?:st|nd|rd)|1st|2nd|3rd|Small|Consolation|S|C)\s*[:\-]?\s*([0-9]{4})/i);
-    if (prizeMatch && currentType) {
-      let level = prizeMatch[1].toUpperCase();
-      if (level.match(/1ST/)) level = '1';
-      else if (level.match(/2ND/)) level = '2';
-      else if (level.match(/3RD/)) level = '3';
-      else if (level.match(/SMALL|^S$/)) level = 'S';
-      else if (level.match(/CONSOLATION|^C$/)) level = 'C';
+    // 跳过6D行
+    if (line.match(/6D/i)) {
+      currentType = null;
+      continue;
+    }
 
-      const number = prizeMatch[2];
-      if (!result.data[currentType][level]) {
-        result.data[currentType][level] = '';
+    if (!currentType) continue;
+
+    // 检测小奖和安慰奖部分
+    if (line === 'S:') {
+      currentSection = 'S';
+      continue;
+    } else if (line === 'C:') {
+      currentSection = 'C';
+      continue;
+    }
+
+    // 解析1/2/3奖（格式："1:2220 (J) 2:4655 (G) 3:8489 (C)"）
+    if (currentSection === 'prize') {
+      // 提取所有 "数字:号码" 格式，忽略括号内的字母
+      const matches = line.matchAll(/(\d+):(\d{4})\s*\([^)]*\)/g);
+      for (let match of matches) {
+        const level = match[1]; // '1', '2', '3'
+        const number = match[2]; // '2220', '4655' 等
+        if (level && number && result.data[currentType].hasOwnProperty(level)) {
+          if (!result.data[currentType][level]) {
+            result.data[currentType][level] = '';
+          }
+          result.data[currentType][level] += (result.data[currentType][level] ? ' ' : '') + number;
+        }
       }
-      result.data[currentType][level] += (result.data[currentType][level] ? ' ' : '') + number;
+    } else if (currentSection === 'S') {
+      // 提取所有4位数字
+      const matches = line.matchAll(/\d{4}/g);
+      for (let match of matches) {
+        const number = match[0];
+        if (!result.data[currentType]['S']) {
+          result.data[currentType]['S'] = '';
+        }
+        result.data[currentType]['S'] += (result.data[currentType]['S'] ? ' ' : '') + number;
+      }
+    } else if (currentSection === 'C') {
+      // 提取所有4位数字
+      const matches = line.matchAll(/\d{4}/g);
+      for (let match of matches) {
+        const number = match[0];
+        if (!result.data[currentType]['C']) {
+          result.data[currentType]['C'] = '';
+        }
+        result.data[currentType]['C'] += (result.data[currentType]['C'] ? ' ' : '') + number;
+      }
     }
   }
 
