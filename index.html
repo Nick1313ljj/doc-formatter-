@@ -2144,7 +2144,7 @@ function parseLotteryData(text) {
       for (let match of matches) {
         const level = match[1]; // '1', '2', '3'
         const number = match[2]; // '2220', '4655' 等
-        if (level && number && result.data[currentType].hasOwnProperty(level)) {
+        if (level && number) {
           if (!result.data[currentType][level]) {
             result.data[currentType][level] = '';
           }
