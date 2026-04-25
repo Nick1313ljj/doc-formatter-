@@ -180,6 +180,7 @@
   <button class="tab" onclick="switchTab(4)">⑤ 沙拉吉她</button>
   <button class="tab" onclick="switchTab(5)">⑥ l3n3</button>
   <button class="tab" onclick="switchTab(6)">⑦ XF</button>
+  <button class="tab" onclick="switchTab(7)">⑧ 中奖</button>
 </div>
 
 <!-- ══ Panel 0: 文字提取 (OCR) ══ -->
@@ -382,6 +383,52 @@
       </div>
     </div>
     <div id="output6Message" style="text-align:center;color:var(--muted);padding:20px">—</div>
+  </div>
+</div>
+
+<!-- ══ Panel 7: 中奖 ══ -->
+<div class="panel" id="panel7">
+  <div class="section">
+    <div class="sec-label">号码库管理</div>
+    <textarea id="input7LotteryRaw" placeholder="粘贴开彩号码（复制自网站或来源）..." style="min-height:120px"></textarea>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-go" onclick="pasteTo('input7LotteryRaw')" style="background:var(--blue)">📋 粘贴</button>
+      <button class="btn btn-go" onclick="addLotteryToLib()" style="background:var(--accent)">➕ 添加到库</button>
+      <button class="hbtn" onclick="document.getElementById('input7LotteryRaw').value=''">✕ 清空</button>
+      <button class="hbtn" onclick="toggleLotteryHistory()" style="border-color:#9333ea;color:#9333ea">🔍 历史号码</button>
+    </div>
+    <div id="lotteryLibStatus" style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:4px;font-size:11px;color:var(--muted)">号码库状态：空</div>
+  </div>
+
+  <div class="section">
+    <div class="sec-label">检查中奖</div>
+    <textarea id="input7Ticket" placeholder="粘贴票根号码..." style="min-height:120px"></textarea>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-go" onclick="pasteTo('input7Ticket')" style="background:var(--blue)">📋 粘贴</button>
+      <button class="btn btn-go" onclick="checkWinning()" style="background:var(--accent)">🎯 检查中奖</button>
+      <button class="hbtn" onclick="document.getElementById('input7Ticket').value=''">✕ 清空</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-label">检查结果</div>
+    <div class="output-wrap">
+      <div class="output" id="output7">—</div>
+      <button class="copy-btn" onclick="copyOutput(7)">复制</button>
+    </div>
+  </div>
+
+  <!-- 隐藏的历史号码菜单 -->
+  <div id="lotteryHistoryModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;overflow:auto">
+    <div style="background:#fff;margin:20px auto;max-width:600px;padding:20px;border-radius:8px;max-height:80vh;overflow:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0;font-size:16px">历史开彩号码库</h3>
+        <button class="hbtn" onclick="toggleLotteryHistory()" style="padding:4px 8px">✕ 关闭</button>
+      </div>
+      <div id="lotteryHistoryContent" style="font-family:var(--mono);font-size:12px;line-height:1.6;max-height:70vh;overflow-y:auto">
+        暂无号码
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1987,7 +2034,329 @@ async function downloadXFImage() {
   }
 }
 
+// ════════════════════════════════
+// PANEL 7: 中奖 (LOTTERY CHECKER)
+// ════════════════════════════════
+
+// 生成数字的所有排列（Box expansion）
+function generatePermutations(digits) {
+  if (digits.length === 0) return [];
+  if (digits.length === 1) return [digits];
+
+  const result = [];
+  for (let i = 0; i < digits.length; i++) {
+    const char = digits[i];
+    const remaining = digits.slice(0, i) + digits.slice(i + 1);
+    for (let perm of generatePermutations(remaining)) {
+      result.push(char + perm);
+    }
+  }
+  return result;
+}
+
+// 获取号码库数据
+function getLotteryDatabase() {
+  const data = localStorage.getItem('lotteryDatabase');
+  return data ? JSON.parse(data) : [];
+}
+
+// 保存号码库数据
+function saveLotteryDatabase(db) {
+  localStorage.setItem('lotteryDatabase', JSON.stringify(db));
+  updateLotteryStatus();
+}
+
+// 更新号码库状态显示
+function updateLotteryStatus() {
+  const db = getLotteryDatabase();
+  const total = db.reduce((sum, entry) => {
+    const counts = Object.keys(entry.data).reduce((s, type) => {
+      const nums = entry.data[type];
+      return s + Object.keys(nums).reduce((c, level) => c + nums[level].split(' ').length, 0);
+    }, 0);
+    return sum + counts;
+  }, 0);
+
+  const dates = db.map(e => e.date).join(', ') || '无';
+  document.getElementById('lotteryLibStatus').innerHTML =
+    `号码库状态：共 ${db.length} 期，${total} 个号码 | 日期：${dates}`;
+}
+
+// 解析开彩号码文本
+function parseLotteryData(text) {
+  const result = { date: null, data: { L3: {}, L: {}, N3: {}, N: {} } };
+
+  // 尝试提取日期（格式可能是 "2026-04-25" 或 "25/04/2026" 等）
+  const dateMatch = text.match(/(\d{4}[-\/]\d{2}[-\/]\d{2}|\d{2}[-\/]\d{2}[-\/]\d{4})/);
+  if (dateMatch) {
+    result.date = dateMatch[1];
+  }
+
+  // 按类型提取号码（支持多种格式）
+  // 格式示例：
+  // Lucky 3:30PM (L3): 2345
+  // Lucky (L): 4567
+  // Perdana 3:30PM (N3): 6789
+  // Perdana (N): 8901
+
+  const lines = text.split('\n');
+  let currentType = null;
+
+  for (let line of lines) {
+    const trimmed = line.trim();
+
+    // 检测类型
+    if (trimmed.match(/Lucky.*3.*30/i) || trimmed.match(/L3/i)) currentType = 'L3';
+    else if (trimmed.match(/Lucky/i) && !trimmed.match(/3.*30/i) && trimmed.match(/L[^3]/i)) currentType = 'L';
+    else if (trimmed.match(/Perdana.*3.*30/i) || trimmed.match(/N3/i)) currentType = 'N3';
+    else if (trimmed.match(/Perdana/i) && !trimmed.match(/3.*30/i) && trimmed.match(/N[^3]/i)) currentType = 'N';
+
+    // 提取奖项和号码（格式: "1st Prize: 1234" 或 "Prize 1: 1234" 等）
+    const prizeMatch = trimmed.match(/([1-3](?:st|nd|rd)|1st|2nd|3rd|Small|Consolation|S|C)\s*[:\-]?\s*([0-9]{4})/i);
+    if (prizeMatch && currentType) {
+      let level = prizeMatch[1].toUpperCase();
+      if (level.match(/1ST/)) level = '1';
+      else if (level.match(/2ND/)) level = '2';
+      else if (level.match(/3RD/)) level = '3';
+      else if (level.match(/SMALL|^S$/)) level = 'S';
+      else if (level.match(/CONSOLATION|^C$/)) level = 'C';
+
+      const number = prizeMatch[2];
+      if (!result.data[currentType][level]) {
+        result.data[currentType][level] = '';
+      }
+      result.data[currentType][level] += (result.data[currentType][level] ? ' ' : '') + number;
+    }
+  }
+
+  return result;
+}
+
+// 解析票根数据
+function parseTicketData(text) {
+  const tickets = [];
+  // 格式: "1234=10B" 或 "1234=10B/5S" 或 "1234=10B/5S/2A1"
+  // 或直接: "1234 10B 5S"
+
+  const lines = text.split('\n');
+  for (let line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // 尝试多种格式
+    // 格式1: "1234=10B/5S/2A1"
+    let match = trimmed.match(/([0-9]{4})\s*=\s*([A-Z0-9\\/]+)/i);
+    if (match) {
+      const number = match[1];
+      const parts = match[2].split('/');
+
+      let big = 0, small = 0, a1 = 0;
+      for (let part of parts) {
+        const m = part.match(/([0-9]+)\s*([A-Z]+)/i);
+        if (m) {
+          const amount = parseInt(m[1]);
+          const type = m[2].toUpperCase();
+          if (type === 'B' || type === 'BIG') big = amount;
+          else if (type === 'S' || type === 'SMALL') small = amount;
+          else if (type === 'A1') a1 = amount;
+        }
+      }
+
+      if (big || small || a1) {
+        tickets.push({ number, big, small, a1 });
+      }
+    }
+  }
+
+  return tickets;
+}
+
+// 添加开彩号码到库
+async function addLotteryToLib() {
+  const text = document.getElementById('input7LotteryRaw').value.trim();
+  if (!text) { showToast('请粘贴开彩号码'); return; }
+
+  const parsed = parseLotteryData(text);
+
+  if (!parsed.date) {
+    showToast('⚠️ 未能识别日期，请确保包含日期信息');
+  }
+
+  // 检查是否有任何有效数据
+  const hasData = Object.keys(parsed.data).some(type =>
+    Object.keys(parsed.data[type]).length > 0
+  );
+
+  if (!hasData) {
+    showToast('无法解析号码数据，请检查格式');
+    return;
+  }
+
+  const db = getLotteryDatabase();
+
+  // 检查是否已有该日期的数据
+  const existingIndex = db.findIndex(e => e.date === parsed.date);
+  if (existingIndex >= 0) {
+    // 合并数据
+    const existing = db[existingIndex];
+    for (let type in parsed.data) {
+      for (let level in parsed.data[type]) {
+        if (existing.data[type][level]) {
+          existing.data[type][level] += ' ' + parsed.data[type][level];
+        } else {
+          existing.data[type][level] = parsed.data[type][level];
+        }
+      }
+    }
+  } else {
+    // 新增条目
+    db.push(parsed);
+  }
+
+  saveLotteryDatabase(db);
+  document.getElementById('input7LotteryRaw').value = '';
+  showToast('✓ 已添加到号码库');
+}
+
+// 检查中奖
+async function checkWinning() {
+  const ticketText = document.getElementById('input7Ticket').value.trim();
+  if (!ticketText) { showToast('请粘贴票根号码'); return; }
+
+  const db = getLotteryDatabase();
+  if (db.length === 0) { showToast('号码库为空，请先添加开彩号码'); return; }
+
+  const tickets = parseTicketData(ticketText);
+  if (tickets.length === 0) { showToast('无法解析票根数据，请检查格式'); return; }
+
+  let output = '═ 中奖检查结果 ═\n\n';
+  let hasWinning = false;
+
+  for (let ticket of tickets) {
+    const { number, big, small, a1 } = ticket;
+    let winning = [];
+
+    // 检查每个日期的数据
+    for (let entry of db) {
+      const dateStr = entry.date ? `(${entry.date})` : '';
+
+      // 检查各个类型和奖项
+      for (let type in entry.data) {
+        const typeData = entry.data[type];
+
+        for (let level in typeData) {
+          const nums = typeData[level].split(' ').filter(n => n);
+
+          // 直接匹配
+          if (nums.includes(number)) {
+            const betInfo = [];
+            if (big > 0) betInfo.push(`${big}B`);
+            if (small > 0) betInfo.push(`${small}S`);
+            if (a1 > 0) betInfo.push(`${a1}A1`);
+
+            winning.push({
+              type,
+              level,
+              bet: betInfo.join('/'),
+              date: dateStr
+            });
+          }
+
+          // Box 匹配（检查所有排列）
+          const perms = generatePermutations(number);
+          for (let perm of perms) {
+            if (perm !== number && nums.includes(perm)) {
+              const betInfo = [];
+              if (big > 0) betInfo.push(`${big}B`);
+              if (small > 0) betInfo.push(`${small}S`);
+              if (a1 > 0) betInfo.push(`${a1}A1`);
+
+              winning.push({
+                type,
+                level,
+                bet: betInfo.join('/'),
+                date: dateStr,
+                isBox: true
+              });
+              break; // 只记录一次 Box 匹配
+            }
+          }
+        }
+      }
+    }
+
+    if (winning.length > 0) {
+      hasWinning = true;
+      output += `📌 号码: ${number}\n`;
+      for (let w of winning) {
+        const boxStr = w.isBox ? ' (Box)' : '';
+        const levelName = { '1': '特奖', '2': '二奖', '3': '三奖', 'S': '小奖', 'C': '安慰奖' }[w.level] || w.level;
+        output += `  ${w.type} ${levelName}${boxStr}: ${w.bet} ${w.date}\n`;
+      }
+      output += '\n';
+    } else {
+      output += `❌ 号码: ${number} - 未中奖\n`;
+    }
+  }
+
+  if (!hasWinning) {
+    output = '本期未中奖。';
+  }
+
+  document.getElementById('output7').textContent = output;
+}
+
+// 切换历史号码菜单
+function toggleLotteryHistory() {
+  const modal = document.getElementById('lotteryHistoryModal');
+  const isVisible = modal.style.display !== 'none';
+
+  if (isVisible) {
+    modal.style.display = 'none';
+  } else {
+    const db = getLotteryDatabase();
+    let html = '';
+
+    if (db.length === 0) {
+      html = '<p style="color:var(--muted)">暂无号码</p>';
+    } else {
+      // 按日期倒序排列
+      const sorted = [...db].sort((a, b) => {
+        if (!a.date || !b.date) return 0;
+        return b.date.localeCompare(a.date);
+      });
+
+      for (let entry of sorted) {
+        const dateStr = entry.date || '未知日期';
+        html += `<div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">\n`;
+        html += `<strong style="font-size:13px">${dateStr}</strong>\n`;
+        html += `<div style="margin-top:8px;font-size:11px;color:var(--muted)">\n`;
+
+        for (let type in entry.data) {
+          const typeData = entry.data[type];
+          if (Object.keys(typeData).length > 0) {
+            html += `<div style="margin:4px 0"><strong>${type}:</strong> `;
+            const nums = [];
+            for (let level in typeData) {
+              const levelName = { '1': '特奖', '2': '二奖', '3': '三奖', 'S': '小奖', 'C': '安慰奖' }[level] || level;
+              nums.push(`${levelName}:${typeData[level]}`);
+            }
+            html += nums.join(' | ');
+            html += '</div>\n';
+          }
+        }
+
+        html += `</div></div>\n`;
+      }
+    }
+
+    document.getElementById('lotteryHistoryContent').innerHTML = html;
+    modal.style.display = 'block';
+  }
+}
+
 // Init
+updateLotteryStatus();
 loadApiKey();
 </script>
 </body>
