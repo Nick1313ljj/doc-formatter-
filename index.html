@@ -2274,16 +2274,14 @@ async function checkWinning() {
   const tickets = parseTicketData(ticketText);
   if (tickets.length === 0) { showToast('无法解析票根数据，请检查格式'); return; }
 
-  let output = '═ 中奖检查结果 ═\n\n';
-  let hasWinning = false;
+  let winningResults = []; // 存储所有中奖结果
 
   for (let ticket of tickets) {
     const { number, big, small, a1 } = ticket;
-    let winning = [];
 
     // 检查每个日期的数据
     for (let entry of db) {
-      const dateStr = entry.date ? `(${entry.date})` : '';
+      const dateStr = entry.date || '';
 
       // 检查各个类型和奖项
       for (let type in entry.data) {
@@ -2292,18 +2290,21 @@ async function checkWinning() {
         for (let level in typeData) {
           const nums = typeData[level].split(' ').filter(n => n);
 
-          // 直接匹配
+          // 直接匹配（用户号码直接中奖）
           if (nums.includes(number)) {
             const betInfo = [];
             if (big > 0) betInfo.push(`${big}B`);
             if (small > 0) betInfo.push(`${small}S`);
             if (a1 > 0) betInfo.push(`${a1}A1`);
 
-            winning.push({
+            winningResults.push({
+              winningNum: number,
               type,
               level,
               bet: betInfo.join('/'),
-              date: dateStr
+              date: dateStr,
+              userNum: number,
+              isBox: false
             });
           }
 
@@ -2316,11 +2317,13 @@ async function checkWinning() {
               if (small > 0) betInfo.push(`${small}S`);
               if (a1 > 0) betInfo.push(`${a1}A1`);
 
-              winning.push({
+              winningResults.push({
+                winningNum: perm,  // 开彩号码
                 type,
                 level,
                 bet: betInfo.join('/'),
                 date: dateStr,
+                userNum: number,   // 用户的 Box 号
                 isBox: true
               });
               break; // 只记录一次 Box 匹配
@@ -2329,23 +2332,24 @@ async function checkWinning() {
         }
       }
     }
-
-    if (winning.length > 0) {
-      hasWinning = true;
-      output += `📌 号码: ${number}\n`;
-      for (let w of winning) {
-        const boxStr = w.isBox ? ' (Box)' : '';
-        const levelName = { '1': '特奖', '2': '二奖', '3': '三奖', 'S': '小奖', 'C': '安慰奖' }[w.level] || w.level;
-        output += `  ${w.type} ${levelName}${boxStr}: ${w.bet} ${w.date}\n`;
-      }
-      output += '\n';
-    } else {
-      output += `❌ 号码: ${number} - 未中奖\n`;
-    }
   }
 
-  if (!hasWinning) {
-    output = '本期未中奖。';
+  // 生成输出
+  let output = '═ 中奖检查结果 ═\n\n';
+
+  if (winningResults.length === 0) {
+    output = '未中奖';
+  } else {
+    for (let result of winningResults) {
+      const levelName = { '1': '特奖', '2': '二奖', '3': '三奖', 'S': '入围奖', 'C': '安慰奖' }[result.level] || result.level;
+      let line = `${result.winningNum} ${result.type} ${levelName} ${result.bet}`;
+
+      if (result.isBox) {
+        line += ` (来自 ${result.userNum} Box)`;
+      }
+
+      output += line + '\n';
+    }
   }
 
   document.getElementById('output7').textContent = output;
