@@ -2214,36 +2214,42 @@ function parseTicketData(text) {
       continue;
     }
 
-    // 检查是否是彩票公司标记行（4位数字上面一行）
+    // 首先检查当前行是否是公司标记（含有 L3/N3/L/N）
+    const bracketMatch = line.match(/\(([A-Z0-9]+)\)/);
+    const starMatch = line.match(/\*([A-Z]+)/);
+    const letterPart = bracketMatch ? bracketMatch[1] : (starMatch ? starMatch[1] : null);
+
+    // 如果提取到字母部分，检查是否包含公司代码
+    if (letterPart) {
+      const tempCompanies = [];
+      if (letterPart.includes('L3')) tempCompanies.push('L3');
+      if (letterPart.includes('N3')) tempCompanies.push('N3');
+      if (!letterPart.includes('L3') && letterPart.includes('L')) tempCompanies.push('L');
+      if (!letterPart.includes('N3') && letterPart.includes('N')) tempCompanies.push('N');
+
+      // 如果找到有效的公司代码，设为当前公司
+      if (tempCompanies.length > 0) {
+        currentCompanies = tempCompanies;
+        continue;
+      }
+    }
+
+    // 备用：检查行是否是公司标记（4位数字上面一行）
     if (i + 1 < lines.length) {
       const nextLine = lines[i + 1].trim();
-      // 如果下一行包含4位数字，则当前行可能是公司标记
-      if (/\d{4}/.test(nextLine)) {
-        // 只取括号内或星号后的字母
-        const bracketMatch = line.match(/\(([A-Z0-9]+)\)/);
-        const starMatch = line.match(/\*([A-Z]+)/);
-        const letterPart = bracketMatch ? bracketMatch[1] : (starMatch ? starMatch[1] : line);
+      // 如果下一行包含4位数字且当前未识别到公司
+      if (/\d{4}/.test(nextLine) && currentCompanies.length === 0) {
+        // 对整行进行分析
+        let newCompanies = [];
+        if (line.toUpperCase().includes('L3')) newCompanies.push('L3');
+        if (line.toUpperCase().includes('N3')) newCompanies.push('N3');
+        if (!line.toUpperCase().includes('L3') && line.toUpperCase().includes('L')) newCompanies.push('L');
+        if (!line.toUpperCase().includes('N3') && line.toUpperCase().includes('N')) newCompanies.push('N');
 
-        // 解析所有公司（支持 L3N3 这样的组合）
-        currentCompanies = [];
-
-        // L3 和 N3 优先（因为它们包含 L 和 N）
-        if (letterPart.includes('L3')) {
-          currentCompanies.push('L3');
+        if (newCompanies.length > 0) {
+          currentCompanies = newCompanies;
+          continue;
         }
-        if (letterPart.includes('N3')) {
-          currentCompanies.push('N3');
-        }
-
-        // 如果没找到 L3/N3，再检查 L/N
-        if (!letterPart.includes('L3') && letterPart.includes('L')) {
-          currentCompanies.push('L');
-        }
-        if (!letterPart.includes('N3') && letterPart.includes('N')) {
-          currentCompanies.push('N');
-        }
-
-        continue;
       }
     }
 
