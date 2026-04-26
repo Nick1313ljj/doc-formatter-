@@ -393,6 +393,7 @@
     <textarea id="input7LotteryRaw" placeholder="粘贴开彩号码（复制自网站或来源）..." style="min-height:120px"></textarea>
     <div class="btn-row" style="margin-top:10px">
       <button class="btn btn-go" onclick="pasteTo('input7LotteryRaw')" style="background:var(--blue)">📋 粘贴</button>
+      <button class="btn btn-go" onclick="autoFetchLottery()" style="background:#f59e0b" id="autoFetchBtn">🔄 自动抓取</button>
       <button class="btn btn-go" onclick="addLotteryToLib()" style="background:var(--accent)">➕ 添加到库</button>
       <button class="hbtn" onclick="document.getElementById('input7LotteryRaw').value=''">✕ 清空</button>
       <button class="hbtn" onclick="toggleLotteryHistory()" style="border-color:#9333ea;color:#9333ea">🔍 历史号码</button>
@@ -2540,8 +2541,122 @@ function toggleLotteryHistory() {
   }
 }
 
+// ════════════════════════════════
+// 自动抓取开彩号码
+// ════════════════════════════════
+
+async function autoFetchLottery() {
+  const btn = document.getElementById('autoFetchBtn');
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ 抓取中...';
+  btn.disabled = true;
+
+  try {
+    // 使用 CORS 代理
+    const corsProxy = 'https://corsproxy.io/?';
+    const url = 'https://4dyes3.com/en/gdlotto-perdana-lucky';
+    const proxyUrl = corsProxy + encodeURIComponent(url);
+
+    const response = await fetch(proxyUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'text/html' }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const html = await response.text();
+    const lotteryText = extractLotteryNumbers(html);
+
+    if (lotteryText) {
+      document.getElementById('input7LotteryRaw').value = lotteryText;
+      showToast('✓ 自动抓取成功，请检查数据后点击"添加到库"');
+    } else {
+      showToast('⚠️ 未能解析号码，请手动粘贴');
+    }
+  } catch (error) {
+    console.error('Fetch error:', error);
+    showToast('❌ 抓取失败: ' + error.message + '，请手动粘贴');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+// 从 HTML 中提取开彩号码
+function extractLotteryNumbers(html) {
+  // 获取当前日期
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  let result = `${dateStr}\n\n`;
+  let found = false;
+
+  // 提取 Lucky 3:30PM
+  const l3Match = html.match(/Lucky\s*3:30\s*PM.*?(\d{4}).*?(\d{4}).*?(\d{4})/is);
+  if (l3Match) {
+    result += `Lucky 3:30PM\n`;
+    result += `1:${l3Match[1]} 2:${l3Match[2]} 3:${l3Match[3]}\n`;
+    result += `S:\n0000\nC:\n0000\n\n`;
+    found = true;
+  }
+
+  // 提取 Lucky
+  const lMatch = html.match(/^Lucky\s*(?!3:30).*?(\d{4}).*?(\d{4}).*?(\d{4})/ism);
+  if (lMatch) {
+    result += `Lucky\n`;
+    result += `1:${lMatch[1]} 2:${lMatch[2]} 3:${lMatch[3]}\n`;
+    result += `S:\n0000\nC:\n0000\n\n`;
+    found = true;
+  }
+
+  // 提取 Perdana 3:30PM
+  const n3Match = html.match(/Perdana\s*3:30\s*PM.*?(\d{4}).*?(\d{4}).*?(\d{4})/is);
+  if (n3Match) {
+    result += `PERDANA 3:30PM\n`;
+    result += `1:${n3Match[1]} 2:${n3Match[2]} 3:${n3Match[3]}\n`;
+    result += `S:\n0000\nC:\n0000\n\n`;
+    found = true;
+  }
+
+  // 提取 Perdana
+  const nMatch = html.match(/^Perdana\s*(?!3:30).*?(\d{4}).*?(\d{4}).*?(\d{4})/ism);
+  if (nMatch) {
+    result += `PERDANA\n`;
+    result += `1:${nMatch[1]} 2:${nMatch[2]} 3:${nMatch[3]}\n`;
+    result += `S:\n0000\nC:\n0000\n`;
+    found = true;
+  }
+
+  return found ? result : null;
+}
+
+// 初始化定时自动抓取
+function initAutoFetchSchedule() {
+  // 每分钟检查一次是否到达 4pm 或 8pm
+  setInterval(() => {
+    const now = new Date();
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+
+    // 在 16:00-16:05 和 20:00-20:05 之间自动抓取
+    if ((hour === 16 && minute < 5) || (hour === 20 && minute < 5)) {
+      // 检查是否已经在今天抓取过
+      const lastFetchDate = localStorage.getItem('lastAutoFetchDate');
+      const todayStr = now.toISOString().split('T')[0];
+
+      if (lastFetchDate !== todayStr) {
+        autoFetchLottery();
+        localStorage.setItem('lastAutoFetchDate', todayStr);
+      }
+    }
+  }, 60000); // 每 60 秒检查一次
+}
+
 // Init
 updateLotteryStatus();
+initAutoFetchSchedule();
 loadApiKey();
 </script>
 </body>
