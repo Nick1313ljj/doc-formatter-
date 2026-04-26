@@ -2193,7 +2193,6 @@ function parseLotteryData(text) {
 function parseTicketData(text) {
   const tickets = [];
   const lines = text.split('\n');
-  let currentCompany = null;
   const soldOutNumbers = new Set(); // 追踪已售罄的号码
 
   // 第一遍扫描：找出所有已售罄的号码
@@ -2207,10 +2206,11 @@ function parseTicketData(text) {
   }
 
   // 第二遍扫描：解析号码
+  let currentCompanies = []; // 改为支持多公司
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) {
-      currentCompany = null; // 空行重置公司
+      currentCompanies = []; // 空行重置公司
       continue;
     }
 
@@ -2220,26 +2220,35 @@ function parseTicketData(text) {
       // 如果下一行包含4位数字，则当前行可能是公司标记
       if (/\d{4}/.test(nextLine)) {
         // 只取括号内或星号后的字母
-        const bracketMatch = line.match(/\(([A-Z]+)\)/);
+        const bracketMatch = line.match(/\(([A-Z0-9]+)\)/);
         const starMatch = line.match(/\*([A-Z]+)/);
         const letterPart = bracketMatch ? bracketMatch[1] : (starMatch ? starMatch[1] : line);
 
-        // 检测公司名（L3 优先，因为 L3 包含 L）
+        // 解析所有公司（支持 L3N3 这样的组合）
+        currentCompanies = [];
+
+        // L3 和 N3 优先（因为它们包含 L 和 N）
         if (letterPart.includes('L3')) {
-          currentCompany = 'L3';
-        } else if (letterPart.includes('N3')) {
-          currentCompany = 'N3';
-        } else if (letterPart.includes('L')) {
-          currentCompany = 'L';
-        } else if (letterPart.includes('N')) {
-          currentCompany = 'N';
+          currentCompanies.push('L3');
         }
+        if (letterPart.includes('N3')) {
+          currentCompanies.push('N3');
+        }
+
+        // 如果没找到 L3/N3，再检查 L/N
+        if (!letterPart.includes('L3') && letterPart.includes('L')) {
+          currentCompanies.push('L');
+        }
+        if (!letterPart.includes('N3') && letterPart.includes('N')) {
+          currentCompanies.push('N');
+        }
+
         continue;
       }
     }
 
     // 如果有当前公司，解析号码
-    if (currentCompany) {
+    if (currentCompanies.length > 0) {
       // 解析号码：支持 "1234=2B" 或 "(1234)=2B" 或 "L 1234=2B(S.O)" 等格式
       let match = line.match(/\(?([0-9]{4})\)?[^=]*=\s*([A-Z0-9\\.\\/-]+)(?:\s*\((Box|IBox|iBox)\))?/i);
       if (match) {
@@ -2269,7 +2278,10 @@ function parseTicketData(text) {
         }
 
         if (big || small || a1) {
-          tickets.push({ number, big, small, a1, isBox, company: currentCompany });
+          // 为每个公司创建一条记录
+          for (let company of currentCompanies) {
+            tickets.push({ number, big, small, a1, isBox, company });
+          }
         }
       }
     }
