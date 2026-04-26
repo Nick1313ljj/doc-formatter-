@@ -2552,84 +2552,77 @@ async function autoFetchLottery() {
   btn.disabled = true;
 
   try {
-    // 使用 CORS 代理
-    const corsProxy = 'https://corsproxy.io/?';
-    const url = 'https://4dyes3.com/en/gdlotto-perdana-lucky';
-    const proxyUrl = corsProxy + encodeURIComponent(url);
-
-    const response = await fetch(proxyUrl, {
-      method: 'GET',
-      headers: { 'Accept': 'text/html' }
+    // 调用本地爬虫服务器
+    const response = await fetch('http://localhost:3000/api/lottery', {
+      method: 'GET'
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(`服务器错误 ${response.status}`);
     }
 
-    const html = await response.text();
-    const lotteryText = extractLotteryNumbers(html);
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || '未知错误');
+    }
+
+    // 格式化数据为应用需要的格式
+    const lotteryText = formatScrapedData(result.data);
 
     if (lotteryText) {
       document.getElementById('input7LotteryRaw').value = lotteryText;
       showToast('✓ 自动抓取成功，请检查数据后点击"添加到库"');
     } else {
-      showToast('⚠️ 未能解析号码，请手动粘贴');
+      showToast('⚠️ 未能解析号码，请检查服务器是否运行');
     }
   } catch (error) {
     console.error('Fetch error:', error);
-    showToast('❌ 抓取失败: ' + error.message + '，请手动粘贴');
+    // 判断错误类型提供不同提示
+    if (error.message.includes('Failed to fetch')) {
+      showToast('❌ 无法连接本地服务器。请确保：\n1. 运行了 npm install express puppeteer cors\n2. 运行了 node lottery-scraper.js\n3. 服务器在 http://localhost:3000');
+    } else {
+      showToast('❌ 抓取失败: ' + error.message);
+    }
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;
   }
 }
 
-// 从 HTML 中提取开彩号码
-function extractLotteryNumbers(html) {
-  // 获取当前日期
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+// 格式化爬虫返回的数据
+function formatScrapedData(data) {
+  let result = `${data.date}\n\n`;
 
-  let result = `${dateStr}\n\n`;
-  let found = false;
-
-  // 提取 Lucky 3:30PM
-  const l3Match = html.match(/Lucky\s*3:30\s*PM.*?(\d{4}).*?(\d{4}).*?(\d{4})/is);
-  if (l3Match) {
+  // Lucky 3:30PM (L3)
+  if (data.L3['1'] || data.L3['2'] || data.L3['3']) {
     result += `Lucky 3:30PM\n`;
-    result += `1:${l3Match[1]} 2:${l3Match[2]} 3:${l3Match[3]}\n`;
-    result += `S:\n0000\nC:\n0000\n\n`;
-    found = true;
+    result += `1:${data.L3['1']} 2:${data.L3['2']} 3:${data.L3['3']}\n`;
+    result += `S:\nS1 S2 S3 S4\nS5 S6 S7 S8\nC:\nC1 C2 C3 C4\nC5 C6 C7 C8\n\n`;
   }
 
-  // 提取 Lucky
-  const lMatch = html.match(/^Lucky\s*(?!3:30).*?(\d{4}).*?(\d{4}).*?(\d{4})/ism);
-  if (lMatch) {
+  // Lucky (L)
+  if (data.L['1'] || data.L['2'] || data.L['3']) {
     result += `Lucky\n`;
-    result += `1:${lMatch[1]} 2:${lMatch[2]} 3:${lMatch[3]}\n`;
-    result += `S:\n0000\nC:\n0000\n\n`;
-    found = true;
+    result += `1:${data.L['1']} 2:${data.L['2']} 3:${data.L['3']}\n`;
+    result += `S:\nS1 S2 S3 S4\nS5 S6 S7 S8\nC:\nC1 C2 C3 C4\nC5 C6 C7 C8\n\n`;
   }
 
-  // 提取 Perdana 3:30PM
-  const n3Match = html.match(/Perdana\s*3:30\s*PM.*?(\d{4}).*?(\d{4}).*?(\d{4})/is);
-  if (n3Match) {
+  // Perdana 3:30PM (N3)
+  if (data.N3['1'] || data.N3['2'] || data.N3['3']) {
     result += `PERDANA 3:30PM\n`;
-    result += `1:${n3Match[1]} 2:${n3Match[2]} 3:${n3Match[3]}\n`;
-    result += `S:\n0000\nC:\n0000\n\n`;
-    found = true;
+    result += `1:${data.N3['1']} 2:${data.N3['2']} 3:${data.N3['3']}\n`;
+    result += `S:\nS1 S2 S3 S4\nS5 S6 S7 S8\nC:\nC1 C2 C3 C4\nC5 C6 C7 C8\n\n`;
   }
 
-  // 提取 Perdana
-  const nMatch = html.match(/^Perdana\s*(?!3:30).*?(\d{4}).*?(\d{4}).*?(\d{4})/ism);
-  if (nMatch) {
+  // Perdana (N)
+  if (data.N['1'] || data.N['2'] || data.N['3']) {
     result += `PERDANA\n`;
-    result += `1:${nMatch[1]} 2:${nMatch[2]} 3:${nMatch[3]}\n`;
-    result += `S:\n0000\nC:\n0000\n`;
-    found = true;
+    result += `1:${data.N['1']} 2:${data.N['2']} 3:${data.N['3']}\n`;
+    result += `S:\nS1 S2 S3 S4\nS5 S6 S7 S8\nC:\nC1 C2 C3 C4\nC5 C6 C7 C8\n`;
   }
 
-  return found ? result : null;
+  return result;
 }
 
 // 初始化定时自动抓取
