@@ -48,28 +48,54 @@ async function scrapeLotteryNumbers() {
     // 提取数据
     const data = await page.evaluate(() => {
       const pageText = document.body.innerText;
-
-      return {
+      const result = {
         date: new Date().toISOString().split('T')[0],
         L3: { 1: '', 2: '', 3: '', S: '', C: '' },
         L: { 1: '', 2: '', 3: '', S: '', C: '' },
         N3: { 1: '', 2: '', 3: '', S: '', C: '' },
-        N: { 1: '', 2: '', 3: '', S: '', C: '' },
-        debug: {
-          pageText: pageText.substring(0, 3000),
-          allNumbers: pageText.match(/\d{4}/g) || []
-        }
+        N: { 1: '', 2: '', 3: '', S: '', C: '' }
       };
+
+      // 按彩票类型分割文本
+      // 格式: "Type - Live Results\n[Draw Date]\n1st Prize\n(L) XXXX\n2nd Prize\n(M) XXXX\n3rd Prize\n(A) XXXX\nSpecial\nXXXX\n...\nConsolation\nXXXX"
+
+      // Lucky Hari-Hari 3:30 (L3)
+      const l3Match = pageText.match(/LuckyHari-Hari.*?3\.30.*?1st Prize.*?\(.\) (\d{4}).*?2nd Prize.*?\(.\) (\d{4}).*?3rd Prize.*?\(.\) (\d{4})/is);
+      if (l3Match) {
+        result.L3['1'] = l3Match[1];
+        result.L3['2'] = l3Match[2];
+        result.L3['3'] = l3Match[3];
+      }
+
+      // Lucky Hari-Hari 7:30 (L)
+      const lMatch = pageText.match(/LuckyHari-Hari.*?7\.30.*?1st Prize.*?\(.\) (\d{4}).*?2nd Prize.*?\(.\) (\d{4}).*?3rd Prize.*?\(.\) (\d{4})/is);
+      if (lMatch) {
+        result.L['1'] = lMatch[1];
+        result.L['2'] = lMatch[2];
+        result.L['3'] = lMatch[3];
+      }
+
+      // Perdana 3:30 (N3)
+      const n3Match = pageText.match(/Perdana.*?3\.30.*?1st Prize.*?\(.\) (\d{4}).*?2nd Prize.*?\(.\) (\d{4}).*?3rd Prize.*?\(.\) (\d{4})/is);
+      if (n3Match) {
+        result.N3['1'] = n3Match[1];
+        result.N3['2'] = n3Match[2];
+        result.N3['3'] = n3Match[3];
+      }
+
+      // Perdana 7:30 (N)
+      const nMatch = pageText.match(/Perdana.*?7\.30.*?1st Prize.*?\(.\) (\d{4}).*?2nd Prize.*?\(.\) (\d{4}).*?3rd Prize.*?\(.\) (\d{4})/is);
+      if (nMatch) {
+        result.N['1'] = nMatch[1];
+        result.N['2'] = nMatch[2];
+        result.N['3'] = nMatch[3];
+      }
+
+      return result;
     });
 
-    // 输出调试信息到服务器控制台
-    console.log('===== 页面内容（前3000字） =====');
-    console.log(data.debug.pageText);
-    console.log('===== 结束 =====');
-    console.log('找到的所有4位号码:', data.debug.allNumbers.slice(0, 30));
-
-    // 删除调试信息，不返回给客户端
-    delete data.debug;
+    // 输出提取结果
+    console.log('提取结果:', JSON.stringify(data, null, 2));
 
     await page.close();
     return { success: true, data };
