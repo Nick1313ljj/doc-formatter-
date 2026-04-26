@@ -1,0 +1,18 @@
+{
+  "name": "lottery-scraper",
+  "version": "1.0.0",
+  "description": "Local lottery scraper server for 4dyes3.com",
+  "main": "lottery-scraper.js",
+  "scripts": {
+    "start": "node lottery-scraper.js",
+    "dev": "node lottery-scraper.js"
+  },
+  "keywords": ["lottery", "scraper", "puppeteer"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "puppeteer": "^21.0.0",
+    "cors": "^2.8.5"
+  }
+}
