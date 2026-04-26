@@ -420,13 +420,25 @@
 
   <!-- 隐藏的历史号码菜单 -->
   <div id="lotteryHistoryModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;overflow:auto">
-    <div style="background:#fff;margin:20px auto;max-width:600px;padding:20px;border-radius:8px;max-height:80vh;overflow:auto">
+    <div style="background:#fff;margin:20px auto;max-width:800px;padding:20px;border-radius:8px;max-height:85vh;overflow:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <h3 style="margin:0;font-size:16px">历史开彩号码库</h3>
+        <h3 style="margin:0;font-size:16px">历史开彩号码库 - 日历管理</h3>
         <button class="hbtn" onclick="toggleLotteryHistory()" style="padding:4px 8px">✕ 关闭</button>
       </div>
-      <div id="lotteryHistoryContent" style="font-family:var(--mono);font-size:12px;line-height:1.6;max-height:70vh;overflow-y:auto">
-        暂无号码
+
+      <!-- 日历视图 -->
+      <div id="lotteryCalendarView" style="margin-bottom:20px;padding:12px;background:var(--surface2);border-radius:6px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px" id="lotteryDateGrid">
+          暂无号码
+        </div>
+      </div>
+
+      <!-- 详细信息视图 -->
+      <div style="border-top:1px solid var(--border);padding-top:16px">
+        <h4 style="margin:0 0 12px 0;font-size:12px;color:var(--muted);text-transform:uppercase">详细内容</h4>
+        <div id="lotteryHistoryContent" style="font-family:var(--mono);font-size:11px;line-height:1.6;max-height:40vh;overflow-y:auto;background:var(--bg);padding:10px;border-radius:4px">
+          暂无号码
+        </div>
       </div>
     </div>
   </div>
@@ -2358,6 +2370,95 @@ async function checkWinning() {
   document.getElementById('output7').textContent = output;
 }
 
+// 删除指定日期的开彩号码
+function deleteLotteryByDate(date) {
+  if (!confirm(`确认删除 ${date} 的所有开彩号码吗？此操作无法撤销。`)) {
+    return;
+  }
+
+  const db = getLotteryDatabase();
+  const filtered = db.filter(entry => entry.date !== date);
+  saveLotteryDatabase(filtered);
+  showToast(`✓ 已删除 ${date} 的开彩号码`);
+
+  // 重新渲染历史菜单
+  renderLotteryHistory();
+}
+
+// 渲染历史号码库
+function renderLotteryHistory() {
+  const db = getLotteryDatabase();
+
+  // 渲染日期网格
+  let gridHtml = '';
+  let contentHtml = '';
+
+  if (db.length === 0) {
+    gridHtml = '<p style="color:var(--muted);grid-column:1/-1">暂无号码</p>';
+    contentHtml = '<p style="color:var(--muted)">暂无号码</p>';
+  } else {
+    // 按日期倒序排列
+    const sorted = [...db].sort((a, b) => {
+      if (!a.date || !b.date) return 0;
+      return b.date.localeCompare(a.date);
+    });
+
+    // 日期网格卡片
+    for (let entry of sorted) {
+      const dateStr = entry.date || '未知日期';
+      const typeList = Object.keys(entry.data).filter(type =>
+        Object.keys(entry.data[type]).length > 0
+      );
+      const typeCount = typeList.length;
+
+      gridHtml += `
+        <div style="padding:10px;background:#fff;border:1px solid var(--border);border-radius:4px;position:relative;cursor:pointer;transition:all .2s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow='none'" onclick="scrollToDate('${dateStr}')">
+          <div style="font-weight:600;font-size:12px;margin-bottom:4px">${dateStr}</div>
+          <div style="font-size:10px;color:var(--muted)">${typeCount} 种类型</div>
+          <button class="hbtn" style="position:absolute;top:4px;right:4px;padding:2px 6px;font-size:9px" onclick="event.stopPropagation(); deleteLotteryByDate('${dateStr}')">删除</button>
+        </div>
+      `;
+    }
+
+    // 详细内容列表
+    for (let entry of sorted) {
+      const dateStr = entry.date || '未知日期';
+      contentHtml += `<div id="date-${dateStr.replace(/-/g, '')}" style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">\n`;
+      contentHtml += `<strong style="font-size:12px">${dateStr}</strong>\n`;
+      contentHtml += `<div style="margin-top:8px;font-size:10px;color:var(--muted)">\n`;
+
+      for (let type in entry.data) {
+        const typeData = entry.data[type];
+        if (Object.keys(typeData).length > 0) {
+          contentHtml += `<div style="margin:4px 0"><strong>${type}:</strong> `;
+          const nums = [];
+          for (let level in typeData) {
+            const levelName = { '1': '特奖', '2': '二奖', '3': '三奖', 'S': '入围奖', 'C': '安慰奖' }[level] || level;
+            nums.push(`${levelName}:${typeData[level]}`);
+          }
+          contentHtml += nums.join(' | ');
+          contentHtml += '</div>\n';
+        }
+      }
+
+      contentHtml += `</div></div>\n`;
+    }
+  }
+
+  document.getElementById('lotteryDateGrid').innerHTML = gridHtml;
+  document.getElementById('lotteryHistoryContent').innerHTML = contentHtml;
+}
+
+// 滚动到指定日期
+function scrollToDate(date) {
+  const id = 'date-' + date.replace(/-/g, '');
+  const element = document.getElementById(id);
+  if (element) {
+    const container = document.getElementById('lotteryHistoryContent');
+    container.scrollTop = element.offsetTop - 50;
+  }
+}
+
 // 切换历史号码菜单
 function toggleLotteryHistory() {
   const modal = document.getElementById('lotteryHistoryModal');
@@ -2366,43 +2467,7 @@ function toggleLotteryHistory() {
   if (isVisible) {
     modal.style.display = 'none';
   } else {
-    const db = getLotteryDatabase();
-    let html = '';
-
-    if (db.length === 0) {
-      html = '<p style="color:var(--muted)">暂无号码</p>';
-    } else {
-      // 按日期倒序排列
-      const sorted = [...db].sort((a, b) => {
-        if (!a.date || !b.date) return 0;
-        return b.date.localeCompare(a.date);
-      });
-
-      for (let entry of sorted) {
-        const dateStr = entry.date || '未知日期';
-        html += `<div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">\n`;
-        html += `<strong style="font-size:13px">${dateStr}</strong>\n`;
-        html += `<div style="margin-top:8px;font-size:11px;color:var(--muted)">\n`;
-
-        for (let type in entry.data) {
-          const typeData = entry.data[type];
-          if (Object.keys(typeData).length > 0) {
-            html += `<div style="margin:4px 0"><strong>${type}:</strong> `;
-            const nums = [];
-            for (let level in typeData) {
-              const levelName = { '1': '特奖', '2': '二奖', '3': '三奖', 'S': '小奖', 'C': '安慰奖' }[level] || level;
-              nums.push(`${levelName}:${typeData[level]}`);
-            }
-            html += nums.join(' | ');
-            html += '</div>\n';
-          }
-        }
-
-        html += `</div></div>\n`;
-      }
-    }
-
-    document.getElementById('lotteryHistoryContent').innerHTML = html;
+    renderLotteryHistory();
     modal.style.display = 'block';
   }
 }
