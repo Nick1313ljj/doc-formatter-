@@ -55,96 +55,42 @@ async function scrapeLotteryNumbers() {
         N: { 1: '', 2: '', 3: '', S: '', C: '' }
       };
 
-      // 寻找 LuckyHari-Hari 3:30 PM（Lucky 3:30PM）
-      const lh330 = document.evaluate(
-        "//text()[contains(.,'LuckyHari-Hari - Live Results (3.30')]/../..",
-        document,
-        null,
-        XPathResult.FIRST_ORDERED_NODE_TYPE,
-        null
-      ).singleNodeValue;
+      // 获取所有文本内容
+      const pageText = document.body.innerText;
 
-      if (lh330) {
-        const text = lh330.innerText;
-        const prizes = text.match(/1st Prize[\s\S]*?3rd Prize/);
-        if (prizes) {
-          const nums = prizes[0].match(/\(([A-Z])\)\s*(\d{4})/g);
-          nums && nums.forEach((m, i) => {
-            const num = m.match(/(\d{4})/)[1];
-            if (i === 0) result.L3['1'] = num;
-            else if (i === 1) result.L3['2'] = num;
-            else if (i === 2) result.L3['3'] = num;
-          });
+      // 查找各个部分的文本
+      // LuckyHari-Hari 3:30 (L3)
+      if (pageText.includes('LuckyHari-Hari') && pageText.includes('3.30')) {
+        const l3Section = pageText.match(/LuckyHari-Hari.*?3\.30.*?1st Prize.*?(\d{4}).*?2nd Prize.*?(\d{4}).*?3rd Prize.*?(\d{4})/is);
+        if (l3Section) {
+          result.L3['1'] = l3Section[1];
+          result.L3['2'] = l3Section[2];
+          result.L3['3'] = l3Section[3];
         }
       }
 
-      // 寻找 LuckyHari-Hari 7:30 PM（Lucky）
-      const lh730 = document.evaluate(
-        "//text()[contains(.,'LuckyHari-Hari - Live Results (7.30')]/../..",
-        document,
-        null,
-        XPathResult.FIRST_ORDERED_NODE_TYPE,
-        null
-      ).singleNodeValue;
-
-      if (lh730) {
-        const text = lh730.innerText;
-        const prizes = text.match(/1st Prize[\s\S]*?3rd Prize/);
-        if (prizes) {
-          const nums = prizes[0].match(/\(([A-Z])\)\s*(\d{4})/g);
-          nums && nums.forEach((m, i) => {
-            const num = m.match(/(\d{4})/)[1];
-            if (i === 0) result.L['1'] = num;
-            else if (i === 1) result.L['2'] = num;
-            else if (i === 2) result.L['3'] = num;
-          });
-        }
+      // LuckyHari-Hari 7:30 (L)
+      const lSection = pageText.match(/LuckyHari-Hari.*?7\.30.*?1st Prize.*?(\d{4}).*?2nd Prize.*?(\d{4}).*?3rd Prize.*?(\d{4})/is);
+      if (lSection) {
+        result.L['1'] = lSection[1];
+        result.L['2'] = lSection[2];
+        result.L['3'] = lSection[3];
       }
 
-      // 寻找 Perdana 3:30 PM（N3）
-      const p330 = document.evaluate(
-        "//text()[contains(.,'Perdana - Live Results (3.30')]/../..",
-        document,
-        null,
-        XPathResult.FIRST_ORDERED_NODE_TYPE,
-        null
-      ).singleNodeValue;
-
-      if (p330) {
-        const text = p330.innerText;
-        const prizes = text.match(/1st Prize[\s\S]*?3rd Prize/);
-        if (prizes) {
-          const nums = prizes[0].match(/\(([A-Z])\)\s*(\d{4})/g);
-          nums && nums.forEach((m, i) => {
-            const num = m.match(/(\d{4})/)[1];
-            if (i === 0) result.N3['1'] = num;
-            else if (i === 1) result.N3['2'] = num;
-            else if (i === 2) result.N3['3'] = num;
-          });
-        }
+      // Perdana 3:30 (N3)
+      const n3Section = pageText.match(/Perdana.*?3\.30.*?1st Prize.*?(\d{4}).*?2nd Prize.*?(\d{4}).*?3rd Prize.*?(\d{4})/is);
+      if (n3Section) {
+        result.N3['1'] = n3Section[1];
+        result.N3['2'] = n3Section[2];
+        result.N3['3'] = n3Section[3];
       }
 
-      // 寻找 Perdana 7:30 PM（N）
-      const p730 = document.evaluate(
-        "//text()[contains(.,'Perdana - Live Results (7.30')]/../..",
-        document,
-        null,
-        XPathResult.FIRST_ORDERED_NODE_TYPE,
-        null
-      ).singleNodeValue;
-
-      if (p730) {
-        const text = p730.innerText;
-        const prizes = text.match(/1st Prize[\s\S]*?3rd Prize/);
-        if (prizes) {
-          const nums = prizes[0].match(/\(([A-Z])\)\s*(\d{4})/g);
-          nums && nums.forEach((m, i) => {
-            const num = m.match(/(\d{4})/)[1];
-            if (i === 0) result.N['1'] = num;
-            else if (i === 1) result.N['2'] = num;
-            else if (i === 2) result.N['3'] = num;
-          });
-        }
+      // Perdana 7:30 (N)
+      const nSection = pageText.match(/Perdana.*?7\.30.*?1st Prize.*?(\d{4}).*?2nd Prize.*?(\d{4}).*?3rd Prize.*?(\d{4})/is);
+      if (nSection) {
+        result.N['1'] = nSection[1];
+        result.N['2'] = nSection[2];
+        result.N['3'] = nSection[3];
       }
 
       return result;
