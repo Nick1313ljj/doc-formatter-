@@ -2250,7 +2250,8 @@ function parseTicketData(text) {
     // 如果有当前公司，解析号码
     if (currentCompanies.length > 0) {
       // 解析号码：支持 "1234=2B" 或 "(1234)=2B" 或 "L 1234=2B(S.O)" 等格式
-      let match = line.match(/\(?([0-9]{4})\)?[^=]*=\s*([A-Z0-9\\.\\/-]+)(?:\s*\((Box|IBox|iBox)\))?/i);
+      // 更宽松的匹配：提取 4 位数字和等号后的投注信息
+      let match = line.match(/([0-9]{4})[^=]*=\s*([^()]+)(?:\s*\((Box|IBox|iBox)\))?/i);
       if (match) {
         const number = match[1];
 
@@ -2259,7 +2260,7 @@ function parseTicketData(text) {
           continue;
         }
 
-        const betString = match[2];
+        const betString = match[2].trim();
         const boxMarker = match[3] ? match[3].toUpperCase() : null;
         const isBox = boxMarker === 'BOX' || boxMarker === 'IBOX';
 
@@ -2267,7 +2268,7 @@ function parseTicketData(text) {
         let big = 0, small = 0, a1 = 0;
         const parts = betString.split('/');
         for (let part of parts) {
-          const m = part.match(/([0-9.]+)\s*([A-Z]+)/i);
+          const m = part.trim().match(/^([0-9.]+)\s*([A-Z]+)$/i);
           if (m) {
             const amount = parseFloat(m[1]);
             const type = m[2].toUpperCase();
