@@ -58,40 +58,15 @@ async function scrapeLotteryNumbers() {
       // 获取所有文本内容
       const pageText = document.body.innerText;
 
-      // 查找各个部分的文本
-      // LuckyHari-Hari 3:30 (L3)
-      if (pageText.includes('LuckyHari-Hari') && pageText.includes('3.30')) {
-        const l3Section = pageText.match(/LuckyHari-Hari.*?3\.30.*?1st Prize.*?(\d{4}).*?2nd Prize.*?(\d{4}).*?3rd Prize.*?(\d{4})/is);
-        if (l3Section) {
-          result.L3['1'] = l3Section[1];
-          result.L3['2'] = l3Section[2];
-          result.L3['3'] = l3Section[3];
-        }
-      }
+      // 调试：输出页面的相关部分
+      console.log('===== 页面内容调试 =====');
+      console.log(pageText.substring(0, 2000));
+      console.log('===== 结束 =====');
 
-      // LuckyHari-Hari 7:30 (L)
-      const lSection = pageText.match(/LuckyHari-Hari.*?7\.30.*?1st Prize.*?(\d{4}).*?2nd Prize.*?(\d{4}).*?3rd Prize.*?(\d{4})/is);
-      if (lSection) {
-        result.L['1'] = lSection[1];
-        result.L['2'] = lSection[2];
-        result.L['3'] = lSection[3];
-      }
-
-      // Perdana 3:30 (N3)
-      const n3Section = pageText.match(/Perdana.*?3\.30.*?1st Prize.*?(\d{4}).*?2nd Prize.*?(\d{4}).*?3rd Prize.*?(\d{4})/is);
-      if (n3Section) {
-        result.N3['1'] = n3Section[1];
-        result.N3['2'] = n3Section[2];
-        result.N3['3'] = n3Section[3];
-      }
-
-      // Perdana 7:30 (N)
-      const nSection = pageText.match(/Perdana.*?7\.30.*?1st Prize.*?(\d{4}).*?2nd Prize.*?(\d{4}).*?3rd Prize.*?(\d{4})/is);
-      if (nSection) {
-        result.N['1'] = nSection[1];
-        result.N['2'] = nSection[2];
-        result.N['3'] = nSection[3];
-      }
+      // 简化版本：直接查找所有4位数字，按顺序关联到各个彩票类型
+      // 这是一个备用方案，用来获取数据以便调试
+      const allNumbers = pageText.match(/\d{4}/g) || [];
+      console.log('找到的所有4位号码:', allNumbers.slice(0, 20));
 
       return result;
     });
