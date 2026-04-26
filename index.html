@@ -2189,39 +2189,88 @@ function parseLotteryData(text) {
   return result;
 }
 
-// 解析票根数据
+// 解析票根数据 - 支持多彩票公司
 function parseTicketData(text) {
   const tickets = [];
-  // 格式: "1234=10B" 或 "1234=10B/5S" 或 "1234=10B/5S/2A1"
-  // 支持 (Box) 或 (IBox) 标记
-
   const lines = text.split('\n');
+  let currentCompany = null;
+  const soldOutNumbers = new Set(); // 追踪已售罄的号码
+
+  // 第一遍扫描：找出所有已售罄的号码
   for (let line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    // 格式: "1234=10B/5S (Box)" 或 "1234=10B (IBox)" 等
-    let match = trimmed.match(/([0-9]{4})\s*=\s*([A-Z0-9\\/]+)(?:\s*\((Box|IBox)\))?/i);
-    if (match) {
-      const number = match[1];
-      const parts = match[2].split('/');
-      const boxMarker = match[3] ? match[3].toUpperCase() : null;
-      const isBox = boxMarker === 'BOX' || boxMarker === 'IBOX';
-
-      let big = 0, small = 0, a1 = 0;
-      for (let part of parts) {
-        const m = part.match(/([0-9]+)\s*([A-Z]+)/i);
-        if (m) {
-          const amount = parseInt(m[1]);
-          const type = m[2].toUpperCase();
-          if (type === 'B' || type === 'BIG') big = amount;
-          else if (type === 'S' || type === 'SMALL') small = amount;
-          else if (type === 'A1') a1 = amount;
-        }
+    if (line.includes('(S.O)')) {
+      const match = line.match(/([0-9]{4})/);
+      if (match) {
+        soldOutNumbers.add(match[1]);
       }
+    }
+  }
 
-      if (big || small || a1) {
-        tickets.push({ number, big, small, a1, isBox });
+  // 第二遍扫描：解析号码
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) {
+      currentCompany = null; // 空行重置公司
+      continue;
+    }
+
+    // 检查是否是彩票公司标记行（4位数字上面一行）
+    if (i + 1 < lines.length) {
+      const nextLine = lines[i + 1].trim();
+      // 如果下一行包含4位数字，则当前行可能是公司标记
+      if (/\d{4}/.test(nextLine)) {
+        // 只取括号内或星号后的字母
+        const bracketMatch = line.match(/\(([A-Z]+)\)/);
+        const starMatch = line.match(/\*([A-Z]+)/);
+        const letterPart = bracketMatch ? bracketMatch[1] : (starMatch ? starMatch[1] : line);
+
+        // 检测公司名（L3 优先，因为 L3 包含 L）
+        if (letterPart.includes('L3')) {
+          currentCompany = 'L3';
+        } else if (letterPart.includes('N3')) {
+          currentCompany = 'N3';
+        } else if (letterPart.includes('L')) {
+          currentCompany = 'L';
+        } else if (letterPart.includes('N')) {
+          currentCompany = 'N';
+        }
+        continue;
+      }
+    }
+
+    // 如果有当前公司，解析号码
+    if (currentCompany) {
+      // 解析号码：支持 "1234=2B" 或 "(1234)=2B" 或 "L 1234=2B(S.O)" 等格式
+      let match = line.match(/\(?([0-9]{4})\)?[^=]*=\s*([A-Z0-9\\.\\/-]+)(?:\s*\((Box|IBox|iBox)\))?/i);
+      if (match) {
+        const number = match[1];
+
+        // 跳过已售罄的号码
+        if (soldOutNumbers.has(number)) {
+          continue;
+        }
+
+        const betString = match[2];
+        const boxMarker = match[3] ? match[3].toUpperCase() : null;
+        const isBox = boxMarker === 'BOX' || boxMarker === 'IBOX';
+
+        // 解析金额
+        let big = 0, small = 0, a1 = 0;
+        const parts = betString.split('/');
+        for (let part of parts) {
+          const m = part.match(/([0-9.]+)\s*([A-Z]+)/i);
+          if (m) {
+            const amount = parseFloat(m[1]);
+            const type = m[2].toUpperCase();
+            if (type === 'B' || type === 'BIG') big = amount;
+            else if (type === 'S' || type === 'SMALL') small = amount;
+            else if (type === 'A1') a1 = amount;
+          }
+        }
+
+        if (big || small || a1) {
+          tickets.push({ number, big, small, a1, isBox, company: currentCompany });
+        }
       }
     }
   }
@@ -2290,58 +2339,58 @@ async function checkWinning() {
   let winningResults = []; // 存储所有中奖结果
 
   for (let ticket of tickets) {
-    const { number, big, small, a1, isBox } = ticket;
+    const { number, big, small, a1, isBox, company } = ticket;
 
     // 检查每个日期的数据
     for (let entry of db) {
       const dateStr = entry.date || '';
 
-      // 检查各个类型和奖项
-      for (let type in entry.data) {
-        const typeData = entry.data[type];
+      // 仅检查对应公司的数据
+      if (!entry.data[company]) continue;
+      const typeData = entry.data[company];
 
-        for (let level in typeData) {
-          const nums = typeData[level].split(' ').filter(n => n);
+      // 检查各奖项
+      for (let level in typeData) {
+        const nums = typeData[level].split(' ').filter(n => n);
 
-          // 直接匹配（用户号码直接中奖）
-          if (nums.includes(number)) {
-            const betInfo = [];
-            if (big > 0) betInfo.push(`${big}B`);
-            if (small > 0) betInfo.push(`${small}S`);
-            if (a1 > 0) betInfo.push(`${a1}A1`);
+        // 直接匹配（用户号码直接中奖）
+        if (nums.includes(number)) {
+          const betInfo = [];
+          if (big > 0) betInfo.push(`${big}B`);
+          if (small > 0) betInfo.push(`${small}S`);
+          if (a1 > 0) betInfo.push(`${a1}A1`);
 
-            winningResults.push({
-              winningNum: number,
-              type,
-              level,
-              bet: betInfo.join('/'),
-              date: dateStr,
-              userNum: number,
-              isBox: false
-            });
-          }
+          winningResults.push({
+            winningNum: number,
+            company,
+            level,
+            bet: betInfo.join('/'),
+            date: dateStr,
+            userNum: number,
+            isBox: false
+          });
+        }
 
-          // Box 匹配（仅当用户标记了 (Box) 或 (IBox) 时才检查所有排列）
-          if (isBox) {
-            const perms = generatePermutations(number);
-            for (let perm of perms) {
-              if (perm !== number && nums.includes(perm)) {
-                const betInfo = [];
-                if (big > 0) betInfo.push(`${big}B`);
-                if (small > 0) betInfo.push(`${small}S`);
-                if (a1 > 0) betInfo.push(`${a1}A1`);
+        // Box 匹配（仅当用户标记了 (Box) 或 (IBox) 时才检查所有排列）
+        if (isBox) {
+          const perms = generatePermutations(number);
+          for (let perm of perms) {
+            if (perm !== number && nums.includes(perm)) {
+              const betInfo = [];
+              if (big > 0) betInfo.push(`${big}B`);
+              if (small > 0) betInfo.push(`${small}S`);
+              if (a1 > 0) betInfo.push(`${a1}A1`);
 
-                winningResults.push({
-                  winningNum: perm,  // 开彩号码
-                  type,
-                  level,
-                  bet: betInfo.join('/'),
-                  date: dateStr,
-                  userNum: number,   // 用户的 Box 号
-                  isBox: true
-                });
-                break; // 只记录一次 Box 匹配
-              }
+              winningResults.push({
+                winningNum: perm,  // 开彩号码
+                company,
+                level,
+                bet: betInfo.join('/'),
+                date: dateStr,
+                userNum: number,   // 用户的 Box 号
+                isBox: true
+              });
+              break; // 只记录一次 Box 匹配
             }
           }
         }
@@ -2357,7 +2406,7 @@ async function checkWinning() {
   } else {
     for (let result of winningResults) {
       const levelName = { '1': '特奖', '2': '二奖', '3': '三奖', 'S': '入围奖', 'C': '安慰奖' }[result.level] || result.level;
-      let line = `${result.winningNum} ${result.type} ${levelName} ${result.bet}`;
+      let line = `${result.winningNum} ${result.company} ${levelName} ${result.bet}`;
 
       if (result.isBox) {
         line += ` (来自 ${result.userNum} Box)`;
