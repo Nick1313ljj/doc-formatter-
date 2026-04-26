@@ -47,29 +47,29 @@ async function scrapeLotteryNumbers() {
 
     // 提取数据
     const data = await page.evaluate(() => {
-      const result = {
+      const pageText = document.body.innerText;
+
+      return {
         date: new Date().toISOString().split('T')[0],
         L3: { 1: '', 2: '', 3: '', S: '', C: '' },
         L: { 1: '', 2: '', 3: '', S: '', C: '' },
         N3: { 1: '', 2: '', 3: '', S: '', C: '' },
-        N: { 1: '', 2: '', 3: '', S: '', C: '' }
+        N: { 1: '', 2: '', 3: '', S: '', C: '' },
+        debug: {
+          pageText: pageText.substring(0, 3000),
+          allNumbers: pageText.match(/\d{4}/g) || []
+        }
       };
-
-      // 获取所有文本内容
-      const pageText = document.body.innerText;
-
-      // 调试：输出页面的相关部分
-      console.log('===== 页面内容调试 =====');
-      console.log(pageText.substring(0, 2000));
-      console.log('===== 结束 =====');
-
-      // 简化版本：直接查找所有4位数字，按顺序关联到各个彩票类型
-      // 这是一个备用方案，用来获取数据以便调试
-      const allNumbers = pageText.match(/\d{4}/g) || [];
-      console.log('找到的所有4位号码:', allNumbers.slice(0, 20));
-
-      return result;
     });
+
+    // 输出调试信息到服务器控制台
+    console.log('===== 页面内容（前3000字） =====');
+    console.log(data.debug.pageText);
+    console.log('===== 结束 =====');
+    console.log('找到的所有4位号码:', data.debug.allNumbers.slice(0, 30));
+
+    // 删除调试信息，不返回给客户端
+    delete data.debug;
 
     await page.close();
     return { success: true, data };
