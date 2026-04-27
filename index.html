@@ -2547,14 +2547,18 @@ async function generateCard() {
   // 日期升序排列
   results.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-  // 构建卡片 HTML
-  let rows = results.map(r => {
+  // 计算总额
+  const total = results.reduce((sum, r) => sum + parseFloat(r.prize || 0), 0).toFixed(2);
+
+  // 构建卡片 HTML（隔行条纹）
+  let rows = results.map((r, i) => {
     const levelStr = levelMap[r.level] || r.level;
     const boxStr = r.isBox ? ' - IBox' : '';
     const typeStr = `${r.company} - ${levelStr}${boxStr}`;
     const recordNum = r.record.includes('-') ? r.record.split('-').pop() : r.record;
+    const bg = i % 2 === 0 ? '#ffffff' : '#f7f9f7';
     return `
-      <tr>
+      <tr style="background:${bg}">
         <td style="padding:7px 12px;color:#111;font-size:16px;white-space:nowrap">${r.date}</td>
         <td style="padding:7px 12px;color:#00a87a;font-weight:700;font-size:16px;white-space:nowrap">${r.doc}</td>
         <td style="padding:7px 12px;color:#111;font-size:16px;white-space:nowrap">${recordNum}</td>
@@ -2569,7 +2573,7 @@ async function generateCard() {
     <div style="background:#fff;padding:0;font-family:Arial,sans-serif;width:720px">
       <table style="width:100%;border-collapse:collapse">
         <thead>
-          <tr style="background:#f5f5f5">
+          <tr style="background:#e8ede8">
             <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Date</th>
             <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Doc</th>
             <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Record</th>
@@ -2577,9 +2581,15 @@ async function generateCard() {
             <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Bet</th>
             <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Amt</th>
           </tr>
-          <tr><td colspan="6" style="padding:0;border-bottom:2px solid #ddd;height:2px"></td></tr>
+          <tr><td colspan="6" style="padding:0;border-bottom:2px solid #ccc;height:2px"></td></tr>
         </thead>
-        <tbody>${rows}</tbody>
+        <tbody>
+          ${rows}
+          <tr style="background:#e8ede8;border-top:2px solid #ccc">
+            <td colspan="5" style="padding:8px 12px;font-size:16px;font-weight:700;color:#111;text-align:right">Total</td>
+            <td style="padding:8px 12px;font-size:16px;font-weight:700;color:#00a87a;white-space:nowrap">${total}</td>
+          </tr>
+        </tbody>
       </table>
     </div>
   `;
