@@ -2142,48 +2142,49 @@ function parseLotteryData(text) {
 
     if (!currentType) continue;
 
-    // 检测小奖和安慰奖部分
-    if (line === 'S:') {
+    // 检测S/C（支持 "S:" 单行 和 "S:6340" 行内两种格式）
+    if (line.match(/^S:/i)) {
       currentSection = 'S';
+      const inlineNum = line.match(/^S:(\d{4})/i);
+      if (inlineNum) {
+        if (!result.data[currentType]['S']) result.data[currentType]['S'] = '';
+        result.data[currentType]['S'] += (result.data[currentType]['S'] ? ' ' : '') + inlineNum[1];
+      }
       continue;
-    } else if (line === 'C:') {
+    } else if (line.match(/^C:/i)) {
       currentSection = 'C';
+      const inlineNum = line.match(/^C:(\d{4})/i);
+      if (inlineNum) {
+        if (!result.data[currentType]['C']) result.data[currentType]['C'] = '';
+        result.data[currentType]['C'] += (result.data[currentType]['C'] ? ' ' : '') + inlineNum[1];
+      }
       continue;
     }
 
-    // 解析1/2/3奖（格式："1:2220 (J) 2:4655 (G) 3:8489 (C)"）
+    // 解析1/2/3奖 - 支持有无括号字母两种格式
+    // 格式1（爬虫）: "1:0930 2:7018 3:7556"
+    // 格式2（其他）: "1:2220 (J) 2:4655 (G) 3:8489 (C)"
     if (currentSection === 'prize') {
-      // 提取所有 "数字:号码" 格式，忽略括号内的字母
-      const matches = line.matchAll(/(\d+):(\d{4})\s*\([^)]*\)/g);
+      const matches = line.matchAll(/(\d+):(\d{4})(?:\s*\([^)]*\))?/g);
       for (let match of matches) {
-        const level = match[1]; // '1', '2', '3'
-        const number = match[2]; // '2220', '4655' 等
+        const level = match[1];
+        const number = match[2];
         if (level && number) {
-          if (!result.data[currentType][level]) {
-            result.data[currentType][level] = '';
-          }
+          if (!result.data[currentType][level]) result.data[currentType][level] = '';
           result.data[currentType][level] += (result.data[currentType][level] ? ' ' : '') + number;
         }
       }
     } else if (currentSection === 'S') {
-      // 提取所有4位数字
       const matches = line.matchAll(/\d{4}/g);
       for (let match of matches) {
-        const number = match[0];
-        if (!result.data[currentType]['S']) {
-          result.data[currentType]['S'] = '';
-        }
-        result.data[currentType]['S'] += (result.data[currentType]['S'] ? ' ' : '') + number;
+        if (!result.data[currentType]['S']) result.data[currentType]['S'] = '';
+        result.data[currentType]['S'] += (result.data[currentType]['S'] ? ' ' : '') + match[0];
       }
     } else if (currentSection === 'C') {
-      // 提取所有4位数字
       const matches = line.matchAll(/\d{4}/g);
       for (let match of matches) {
-        const number = match[0];
-        if (!result.data[currentType]['C']) {
-          result.data[currentType]['C'] = '';
-        }
-        result.data[currentType]['C'] += (result.data[currentType]['C'] ? ' ' : '') + number;
+        if (!result.data[currentType]['C']) result.data[currentType]['C'] = '';
+        result.data[currentType]['C'] += (result.data[currentType]['C'] ? ' ' : '') + match[0];
       }
     }
   }
@@ -2191,124 +2192,88 @@ function parseLotteryData(text) {
   return result;
 }
 
-// 解析票根数据 - 支持多彩票公司
+// 解析票根数据 - 支持多彩票公司，按 WhatsApp 消息分块
 function parseTicketData(text) {
   const tickets = [];
-  const lines = text.split('\n');
 
-  // 提取日期、时间、单号（从整个文本中）
-  let globalDate = '';
-  let globalTime = '';
-  let globalDoc = '';
+  // 按 WhatsApp 消息块分割（每个 "[日期, 时间] 发送人:" 为一块）
+  // 支持 "[4/19, 4:10 PM] 太子 TaisonHp2: (TT)" 格式
+  const blocks = text.split(/(?=\[\d+\/\d+,\s*\d+:\d+\s*[AP]M\])/i);
 
-  // 优先匹配日期格式 DD.MM.YY （如 26.04.19）
-  let dateMatch = text.match(/(\d{2})\.(\d{2})\.(\d{2})/);
-  if (dateMatch) {
-    const [, dd, mm, yy] = dateMatch;
-    globalDate = `20${yy}-${mm}-${dd}`;
-  } else {
-    // 备用：尝试匹配 DD/MM 格式 (如 19/04)
-    dateMatch = text.match(/(\d{2})\/(\d{2})/);
+  for (let block of blocks) {
+    if (!block.trim()) continue;
+
+    // 提取日期：格式 YY.MM.DD（如 26.04.19 = 2026-04-19）
+    let blockDate = '';
+    const dateMatch = block.match(/(\d{2})\.(\d{2})\.(\d{2})/);
     if (dateMatch) {
-      const [, dd, mm] = dateMatch;
-      // 假设当前年份
-      const year = new Date().getFullYear();
-      globalDate = `${year}-${mm}-${dd}`;
+      const [, yy, mm, dd] = dateMatch;
+      blockDate = `20${yy}-${mm}-${dd}`;
     }
-  }
 
-  // 匹配时间和单号 "26.04.19 1610 \n (64422)" 格式
-  const timeDocMatch = text.match(/(\d{2})\.(\d{2})\.(\d{2})\s+(\d{4})\s*\n\s*\((\d+)\)/);
-  if (timeDocMatch) {
-    globalTime = timeDocMatch[4]; // 1610
-    globalDoc = timeDocMatch[5]; // 64422
-  }
+    // 提取单号：(64422) 格式（5位以上数字）
+    let blockDoc = '';
+    const docMatch = block.match(/\((\d{5,})\)/);
+    if (docMatch) blockDoc = docMatch[1];
 
-  // 第一遍扫描：找出所有已售罄的号码
-  const soldOutNumbers = new Set();
-  for (let line of lines) {
-    if (line.includes('(S.O)')) {
-      const match = line.match(/([0-9]{4})/);
-      if (match) {
-        soldOutNumbers.add(match[1]);
+    // 找出已售罄号码
+    const soldOutNumbers = new Set();
+    const lines = block.split('\n');
+    for (let line of lines) {
+      if (line.includes('(S.O)')) {
+        const m = line.match(/(\d{4})/);
+        if (m) soldOutNumbers.add(m[1]);
       }
     }
-  }
 
-  // 第二遍扫描：解析号码
-  let currentCompanies = [];
+    // 解析投注行
+    let currentCompanies = [];
+    for (let line of lines) {
+      line = line.trim();
+      if (!line) { currentCompanies = []; continue; }
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) {
-      currentCompanies = [];
-      continue;
-    }
-
-    // 检查公司标记 *HELN, *LN, *MPTS 等
-    if (line.startsWith('*')) {
-      const marker = line.substring(1).toUpperCase();
-      currentCompanies = [];
-
-      // 从标记中提取公司代码（只保留 L, N）
-      // 如果包含 L3，优先使用 L3；否则使用 L
-      // 如果包含 N3，优先使用 N3；否则使用 N
-      if (marker.includes('L3')) {
-        currentCompanies.push('L3');
-      } else if (marker.includes('L')) {
-        currentCompanies.push('L');
-      }
-
-      if (marker.includes('N3')) {
-        currentCompanies.push('N3');
-      } else if (marker.includes('N')) {
-        currentCompanies.push('N');
-      }
-
-      continue;
-    }
-
-    // 匹配投注行 "1717=1B" 或 "1717=1B (IBox)" 或 "1717=2B 2S 2A1"
-    const betMatch = line.match(/^(\d{4})=(.+?)(?:\s+\((Box|IBox|iBox)\))?$/i);
-    if (betMatch && currentCompanies.length > 0) {
-      const number = betMatch[1];
-
-      // 跳过已售罄的号码
-      if (soldOutNumbers.has(number)) {
+      // 公司标记：*HELN, *LN, *BKWHELN 等（只提取 L 和 N）
+      if (line.startsWith('*')) {
+        const marker = line.substring(1).toUpperCase();
+        currentCompanies = [];
+        if (marker.includes('L3')) currentCompanies.push('L3');
+        else if (marker.includes('L')) currentCompanies.push('L');
+        if (marker.includes('N3')) currentCompanies.push('N3');
+        else if (marker.includes('N')) currentCompanies.push('N');
         continue;
       }
 
-      const betStr = betMatch[2].trim();
-      const boxMarker = betMatch[3];
-      const isBox = boxMarker && boxMarker.toUpperCase() === 'IBOX';
+      if (currentCompanies.length === 0) continue;
 
-      // 解析投注金额：支持 "1B", "2B 2S", "2B 2S 2A1" 等格式
+      // 投注行：1717=1B 或 1717=2B 2S 2A1 或 1717=1B (IBox)
+      const betMatch = line.match(/^(\d{4})=(.+?)(?:\s+\((Box|IBox|iBox)\))?$/i);
+      if (!betMatch) continue;
+
+      const number = betMatch[1];
+      if (soldOutNumbers.has(number)) continue;
+
+      const betStr = betMatch[2].trim();
+      const isBox = betMatch[3] && betMatch[3].toUpperCase() === 'IBOX';
+
       let big = 0, small = 0, a1 = 0;
-      const parts = betStr.split(/\s+/);
-      for (let part of parts) {
+      for (let part of betStr.split(/\s+/)) {
         const m = part.match(/^([\d.]+)([A-Z]+)$/i);
         if (m) {
-          const amount = parseFloat(m[1]);
-          const type = m[2].toUpperCase();
-          if (type === 'B') big = amount;
-          else if (type === 'S') small = amount;
-          else if (type === 'A1') a1 = amount;
+          const amt = parseFloat(m[1]);
+          const t = m[2].toUpperCase();
+          if (t === 'B') big = amt;
+          else if (t === 'S') small = amt;
+          else if (t === 'A1') a1 = amt;
         }
       }
 
       if (big || small || a1) {
         for (let company of currentCompanies) {
           tickets.push({
-            number,
-            big,
-            small,
-            a1,
-            isBox,
-            company,
-            date: globalDate,
-            doc: globalDoc,
-            time: globalTime,
-            record: `${globalDoc}-${number}`
+            number, big, small, a1, isBox, company,
+            date: blockDate,
+            doc: blockDoc,
+            record: `${blockDoc}-${number}`
           });
         }
       }
