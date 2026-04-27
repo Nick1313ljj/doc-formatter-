@@ -1070,7 +1070,11 @@ function processCharles(raw) {
       // "b box" / "b bo x" / "b b o x" etc — b + whitespace + b-o-x with any internal spaces
       .replace(/\bb\s+b\s*o\s*x\b/gi, 'bbox')
       // "(Box)" / "box" / "bo x" / "b ox" / "b o x" — box with any internal spaces
-      .replace(/\(?\bb\s*o\s*x\b\)?/gi, 'bbox');
+      .replace(/\(?\bb\s*o\s*x\b\)?/gi, 'bbox')
+      // Fix: "1b bbox" / "1b ibox" → "1 bbox" / "1 ibox" (amount glued to 'b' before box marker)
+      .replace(/(\d)b\s+(bbox|ibox)/gi, '$1 $2')
+      // Fix: "1b" at end of line (no box marker after) → "1" (strip trailing b)
+      .replace(/(\d)b(\s*)$/gi, '$1$2');
     if (!line) continue;
 
     // Detect company line: any line containing L and/or N (case insensitive)
