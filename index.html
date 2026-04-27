@@ -398,6 +398,8 @@
       <button class="btn btn-go" onclick="addLotteryToLib()" style="background:var(--accent)">➕ 添加到库</button>
       <button class="hbtn" onclick="document.getElementById('input7LotteryRaw').value=''">✕ 清空</button>
       <button class="hbtn" onclick="toggleLotteryHistory()" style="border-color:#9333ea;color:#9333ea">🔍 历史号码</button>
+      <button class="hbtn" onclick="exportLotteryData()" style="border-color:#2563eb;color:#2563eb">⬇ 导出</button>
+      <label class="hbtn" style="border-color:#2563eb;color:#2563eb;cursor:pointer">⬆ 导入<input type="file" accept=".json" style="display:none" onchange="importLotteryData(this)"></label>
     </div>
     <div id="lotteryLibStatus" style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:4px;font-size:11px;color:var(--muted)">号码库状态：空</div>
   </div>
@@ -2089,6 +2091,55 @@ function generatePermutations(digits) {
 function getLotteryDatabase() {
   const data = localStorage.getItem('lotteryDatabase');
   return data ? JSON.parse(data) : [];
+}
+
+// 导出号码库为 JSON 文件
+function exportLotteryData() {
+  const db = getLotteryDatabase();
+  if (db.length === 0) { showToast('号码库为空，无需导出'); return; }
+
+  const json = JSON.stringify(db, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `lottery_backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✓ 已导出 ${db.length} 期数据`);
+}
+
+// 导入号码库从 JSON 文件
+function importLotteryData(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!Array.isArray(imported)) throw new Error('格式错误');
+
+      const existing = getLotteryDatabase();
+      // 合并：以日期为 key，导入的覆盖已有的
+      const merged = [...existing];
+      for (let entry of imported) {
+        const idx = merged.findIndex(e => e.date === entry.date);
+        if (idx >= 0) {
+          merged[idx] = entry; // 覆盖
+        } else {
+          merged.push(entry); // 新增
+        }
+      }
+
+      saveLotteryDatabase(merged);
+      showToast(`✓ 已导入 ${imported.length} 期数据，共 ${merged.length} 期`);
+    } catch (err) {
+      showToast('❌ 导入失败：文件格式不正确');
+    }
+    input.value = ''; // 重置 input 以便再次选择
+  };
+  reader.readAsText(file);
 }
 
 // 保存号码库数据
