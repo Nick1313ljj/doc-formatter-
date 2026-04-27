@@ -7,6 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>单据排版工具 v16</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -416,6 +417,23 @@
     <div class="output-wrap">
       <div class="output" id="output7">—</div>
       <button class="copy-btn" onclick="copyOutput(7)">复制</button>
+    </div>
+  </div>
+
+  <!-- 卡片生成区域 -->
+  <div class="section" id="cardSection" style="display:none">
+    <div class="sec-label">分享卡片</div>
+    <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-go" onclick="generateCard()" style="background:var(--accent)">🖼 生成卡片</button>
+      <button class="btn btn-go" id="shareWaBtn" onclick="shareCardToWhatsApp()" style="background:#25D366;display:none">📱 WhatsApp 分享</button>
+      <button class="btn btn-go" id="downloadBtn" onclick="downloadCard()" style="background:var(--blue);display:none">⬇ 下载图片</button>
+    </div>
+    <!-- 卡片预览 -->
+    <div id="cardPreview" style="display:none;margin-bottom:12px">
+      <img id="cardImage" style="max-width:100%;border:1px solid var(--border)" />
+    </div>
+    <!-- 卡片模板（用于生成图片，平时隐藏在屏幕外） -->
+    <div id="cardTemplate" style="position:fixed;left:-9999px;top:0;background:#fff;padding:24px;font-family:'IBM Plex Mono',monospace;min-width:600px">
     </div>
   </div>
 
@@ -2504,14 +2522,121 @@ async function checkWinning() {
   // 输出到表格容器
   const outputDiv = document.getElementById('output7');
   outputDiv.innerHTML = htmlOutput;
+
+  // 如果有中奖结果，显示卡片区域并保存结果
+  if (winningResults.length > 0) {
+    document.getElementById('cardSection').style.display = 'block';
+    window._lastWinningResults = winningResults;
+    // 隐藏之前的卡片预览
+    document.getElementById('cardPreview').style.display = 'none';
+    document.getElementById('shareWaBtn').style.display = 'none';
+    document.getElementById('downloadBtn').style.display = 'none';
+  } else {
+    document.getElementById('cardSection').style.display = 'none';
+  }
 }
 
-// WhatsApp 分享中奖卡片
-function shareToWhatsApp(btn, date, doc, record, type, amt, winningNum) {
-  const message = `🎉 中奖通知\n\n📅 日期：${date}\n📋 单号：${doc}\n🎫 中奖号：${record}\n🏆 位置：${type}\n💰 奖金：RM ${amt}\n🔢 开彩号：${winningNum}`;
-  const encodedMsg = encodeURIComponent(message);
-  const waLink = `https://wa.me/?text=${encodedMsg}`;
-  window.open(waLink, '_blank');
+// 生成卡片图片
+async function generateCard() {
+  const results = window._lastWinningResults;
+  if (!results || results.length === 0) return;
+
+  const levelMap = { '1': '1奖', '2': '2奖', '3': '3奖', 'S': '特奖', 'C': '安慰奖' };
+
+  // 构建卡片 HTML
+  let rows = results.map(r => {
+    const typeStr = `${levelMap[r.level]||r.level} ${r.company} ${r.typeStr}`;
+    return `
+      <tr>
+        <td style="padding:14px 20px;color:#333;font-size:14px">${r.date}</td>
+        <td style="padding:14px 20px;color:#00a87a;font-weight:700;font-size:14px">${r.doc}</td>
+        <td style="padding:14px 20px;color:#333;font-size:14px">${r.record}</td>
+        <td style="padding:14px 20px;color:#333;font-size:14px">${typeStr}</td>
+        <td style="padding:14px 20px;color:#333;font-weight:700;font-size:14px">${r.prize}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const cardHtml = `
+    <div style="background:#fff;padding:0;font-family:'IBM Plex Mono',monospace;width:680px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f5f5f5;border-bottom:2px solid #ddd">
+            <th style="padding:16px 20px;text-align:left;font-size:14px;font-weight:700;color:#333">Date</th>
+            <th style="padding:16px 20px;text-align:left;font-size:14px;font-weight:700;color:#333">Doc</th>
+            <th style="padding:16px 20px;text-align:left;font-size:14px;font-weight:700;color:#333">Record</th>
+            <th style="padding:16px 20px;text-align:left;font-size:14px;font-weight:700;color:#333">Type</th>
+            <th style="padding:16px 20px;text-align:left;font-size:14px;font-weight:700;color:#333">Amt</th>
+          </tr>
+          <tr><td colspan="5" style="padding:0;border-bottom:2px solid #ddd;height:1px"></td></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+
+  const template = document.getElementById('cardTemplate');
+  template.innerHTML = cardHtml;
+
+  try {
+    const canvas = await html2canvas(template.firstElementChild, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true
+    });
+
+    const imgUrl = canvas.toDataURL('image/png');
+    const imgEl = document.getElementById('cardImage');
+    imgEl.src = imgUrl;
+    document.getElementById('cardPreview').style.display = 'block';
+    document.getElementById('shareWaBtn').style.display = 'inline-flex';
+    document.getElementById('downloadBtn').style.display = 'inline-flex';
+    window._cardImageUrl = imgUrl;
+    window._cardCanvas = canvas;
+  } catch(e) {
+    showToast('生成图片失败: ' + e.message);
+  }
+}
+
+// 下载卡片图片
+function downloadCard() {
+  if (!window._cardImageUrl) return;
+  const a = document.createElement('a');
+  a.href = window._cardImageUrl;
+  a.download = `中奖结果_${new Date().toISOString().split('T')[0]}.png`;
+  a.click();
+}
+
+// WhatsApp 分享图片
+async function shareCardToWhatsApp() {
+  if (!window._cardCanvas) return;
+
+  // 尝试使用 Web Share API（手机上支持直接分享图片）
+  if (navigator.share && navigator.canShare) {
+    try {
+      window._cardCanvas.toBlob(async (blob) => {
+        const file = new File([blob], '中奖结果.png', { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: '中奖结果',
+            text: '🎉 中奖通知'
+          });
+        } else {
+          // 无法分享文件，改为下载
+          downloadCard();
+          showToast('请下载图片后手动分享到 WhatsApp');
+        }
+      });
+      return;
+    } catch(e) {
+      // 用户取消分享，不报错
+    }
+  }
+
+  // 桌面端：下载图片提示
+  downloadCard();
+  showToast('图片已下载，请手动发送到 WhatsApp');
 }
 
 // 删除指定日期的开彩号码
