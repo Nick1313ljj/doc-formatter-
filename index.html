@@ -2099,10 +2099,11 @@ function updateLotteryStatus() {
 function parseLotteryData(text) {
   const result = { date: null, data: { L3: {}, L: {}, N3: {}, N: {} } };
 
-  // 提取日期
-  const dateMatch = text.match(/(\d{4}[-\/]\d{2}[-\/]\d{2})/);
+  // 提取日期并统一为 YYYY-MM-DD 格式
+  const dateMatch = text.match(/(\d{4})[-\/](\d{2})[-\/](\d{2})/);
   if (dateMatch) {
-    result.date = dateMatch[1];
+    const [, yyyy, mm, dd] = dateMatch;
+    result.date = `${yyyy}-${mm}-${dd}`; // 确保统一为连字符格式
   }
 
   // 分割为行并处理
@@ -2200,11 +2201,20 @@ function parseTicketData(text) {
   let globalTime = '';
   let globalDoc = '';
 
-  // 匹配日期格式 26.04.19 或 19/04
-  const dateMatch = text.match(/(\d{2})\.(\d{2})\.(\d{2})/);
+  // 优先匹配日期格式 DD.MM.YY （如 26.04.19）
+  let dateMatch = text.match(/(\d{2})\.(\d{2})\.(\d{2})/);
   if (dateMatch) {
-    const [, yy, mm, dd] = dateMatch;
+    const [, dd, mm, yy] = dateMatch;
     globalDate = `20${yy}-${mm}-${dd}`;
+  } else {
+    // 备用：尝试匹配 DD/MM 格式 (如 19/04)
+    dateMatch = text.match(/(\d{2})\/(\d{2})/);
+    if (dateMatch) {
+      const [, dd, mm] = dateMatch;
+      // 假设当前年份
+      const year = new Date().getFullYear();
+      globalDate = `${year}-${mm}-${dd}`;
+    }
   }
 
   // 匹配时间和单号 "26.04.19 1610 \n (64422)" 格式
@@ -2412,8 +2422,13 @@ async function checkWinning() {
     for (let entry of db) {
       const lotteryDate = entry.date || '';
 
-      // ✅ 日期必须匹配
-      if (ticketDate && ticketDate !== lotteryDate) continue;
+      // ✅ 如果票根有日期，必须匹配；否则跳过日期检查
+      if (ticketDate) {
+        // 日期匹配时允许多种格式：2026-04-19, 2026/04/19 等
+        const normalizedTicketDate = ticketDate.replace(/\//g, '-');
+        const normalizedLotteryDate = lotteryDate.replace(/\//g, '-');
+        if (normalizedTicketDate !== normalizedLotteryDate) continue;
+      }
 
       // 仅检查对应公司的数据
       if (!entry.data[company]) continue;
