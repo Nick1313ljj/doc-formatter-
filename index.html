@@ -2295,26 +2295,42 @@ function parseTicketData(text) {
       }
     }
 
+    // 辅助：从标记字符串提取公司列表
+    function extractCompanies(marker) {
+      const m = marker.toUpperCase();
+      const result = [];
+      if (m.includes('L3')) result.push('L3');
+      else if (m.includes('L')) result.push('L');
+      if (m.includes('N3')) result.push('N3');
+      else if (m.includes('N')) result.push('N');
+      return result;
+    }
+
     // 解析投注行
     let currentCompanies = [];
     for (let line of lines) {
       line = line.trim();
-      if (!line) { currentCompanies = []; continue; }
+      if (!line) continue;
 
-      // 公司标记：*HELN, *LN, *BKWHELN 等（只提取 L 和 N）
+      // 格式1：星号标记 *HELN, *LN, *BKWHELN 等
       if (line.startsWith('*')) {
-        const marker = line.substring(1).toUpperCase();
-        currentCompanies = [];
-        if (marker.includes('L3')) currentCompanies.push('L3');
-        else if (marker.includes('L')) currentCompanies.push('L');
-        if (marker.includes('N3')) currentCompanies.push('N3');
-        else if (marker.includes('N')) currentCompanies.push('N');
-        continue;
+        const cos = extractCompanies(line.substring(1));
+        if (cos.length > 0) { currentCompanies = cos; continue; }
       }
 
+      // 格式2：括号标记 (L3N3), (LN), (L), (N3) 等
+      // 必须是单独一行，且内容只有字母数字
+      if (/^\([A-Z0-9]+\)$/.test(line)) {
+        const inner = line.slice(1, -1);
+        const cos = extractCompanies(inner);
+        if (cos.length > 0) { currentCompanies = cos; continue; }
+      }
+
+      // 跳过非投注行（GT=, 3n18, {0427} 等）
+      if (!line.match(/^\d{4}=/)) continue;
       if (currentCompanies.length === 0) continue;
 
-      // 投注行：1717=1B 或 1717=2B 2S 2A1 或 1717=1B (IBox)
+      // 投注行：1717=1B 或 1717=2B 2S 2A1 或 1717=1B (IBox) 或 1717=1B (Box)
       const betMatch = line.match(/^(\d{4})=(.+?)(?:\s+\((Box|IBox|iBox)\))?$/i);
       if (!betMatch) continue;
 
@@ -2322,7 +2338,8 @@ function parseTicketData(text) {
       if (soldOutNumbers.has(number)) continue;
 
       const betStr = betMatch[2].trim();
-      const isBox = betMatch[3] && betMatch[3].toUpperCase() === 'IBOX';
+      const boxType = betMatch[3] ? betMatch[3].toUpperCase() : null;
+      const isBox = boxType === 'IBOX' || boxType === 'BOX';
 
       let big = 0, small = 0, a1 = 0;
       for (let part of betStr.split(/\s+/)) {
@@ -2339,7 +2356,10 @@ function parseTicketData(text) {
       if (big || small || a1) {
         for (let company of currentCompanies) {
           tickets.push({
-            number, big, small, a1, isBox, company,
+            number, big, small, a1,
+            isBox,                        // true = Box 或 IBox
+            isIBox: boxType === 'IBOX',   // 只有 IBox 才 ÷ 排列数
+            company,
             date: blockDate,
             doc: blockDoc,
             record: `${blockDoc}-${number}`
@@ -2450,15 +2470,15 @@ async function checkWinning() {
   let winningResults = []; // 存储所有中奖结果
 
   for (let ticket of tickets) {
-    const { number, big, small, a1, isBox, company, date: ticketDate, doc, record } = ticket;
+    const { number, big, small, a1, isBox, isIBox, company, date: ticketDate, doc, record } = ticket;
+    const totalBet = big + small + a1;
 
     // 检查每个日期的数据
     for (let entry of db) {
       const lotteryDate = entry.date || '';
 
-      // ✅ 如果票根有日期，必须匹配；否则跳过日期检查
+      // 日期匹配
       if (ticketDate) {
-        // 日期匹配时允许多种格式：2026-04-19, 2026/04/19 等
         const normalizedTicketDate = ticketDate.replace(/\//g, '-');
         const normalizedLotteryDate = lotteryDate.replace(/\//g, '-');
         if (normalizedTicketDate !== normalizedLotteryDate) continue;
@@ -2472,50 +2492,32 @@ async function checkWinning() {
       for (let level in typeData) {
         const nums = typeData[level].split(' ').filter(n => n);
 
-        // 直接匹配（用户号码直接中奖）
+        // 直接匹配（号码完全相同）
         if (nums.includes(number)) {
-          const totalBet = big + small + a1;
-          const prize = calculatePrize(level, totalBet, false, number);
-          const typeStr = isBox ? 'IBOX' : '正字';
-
+          // IBox 直接中：奖金 ÷ 排列数
+          const prize = calculatePrize(level, totalBet, isIBox, number);
           winningResults.push({
-            date: lotteryDate,
-            doc: doc || '-',
-            record: record || number,
-            level,
-            company,
-            winningNum: number,
-            userNum: number,
-            isBox: false,
-            bet: totalBet,
-            prize,
-            typeStr
+            date: lotteryDate, doc: doc || '-', record: record || number,
+            level, company, winningNum: number, userNum: number,
+            isBox: isIBox, bet: totalBet, prize,
+            typeStr: isIBox ? 'IBox' : (isBox ? 'Box' : '')
           });
         }
 
-        // Box 匹配（仅当用户标记了 (Box) 或 (IBox) 时才检查所有排列）
+        // Box/IBox 排列匹配（买的号码的其他排列中奖）
         if (isBox) {
           const perms = generatePermutations(number);
           for (let perm of perms) {
             if (perm !== number && nums.includes(perm)) {
-              const totalBet = big + small + a1;
-              const prize = calculatePrize(level, totalBet, true, number);
-              const typeStr = 'IBOX';
-
+              // IBox：奖金 ÷ 排列数；Box（正Box）：全额
+              const prize = calculatePrize(level, totalBet, isIBox, number);
               winningResults.push({
-                date: lotteryDate,
-                doc: doc || '-',
-                record: record || number,
-                level,
-                company,
-                winningNum: perm,
-                userNum: number,
-                isBox: true,
-                bet: totalBet,
-                prize,
-                typeStr
+                date: lotteryDate, doc: doc || '-', record: record || number,
+                level, company, winningNum: perm, userNum: number,
+                isBox: true, bet: totalBet, prize,
+                typeStr: isIBox ? 'IBox' : 'Box'
               });
-              break; // 只记录一次 Box 匹配
+              break;
             }
           }
         }
