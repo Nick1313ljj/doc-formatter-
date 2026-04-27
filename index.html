@@ -2508,13 +2508,13 @@ async function checkWinning() {
       const recordNum = result.record.includes('-') ? result.record.split('-').pop() : result.record;
 
       htmlOutput += `
-        <tr style="border-bottom:1px solid #eee">
-          <td style="padding:7px 10px;white-space:nowrap;font-size:15px">${result.date}</td>
+        <tr style="border-bottom:1px solid #ddd">
+          <td style="padding:7px 10px;white-space:nowrap;font-size:15px;color:#111">${result.date}</td>
           <td style="padding:7px 10px;color:var(--accent);font-weight:700;white-space:nowrap;font-size:15px">${result.doc}</td>
-          <td style="padding:7px 10px;white-space:nowrap;font-size:15px">${recordNum}</td>
-          <td style="padding:7px 10px;white-space:nowrap;font-size:15px">${typeDisplay}</td>
-          <td style="padding:7px 10px;white-space:nowrap;font-size:15px">${result.bet}</td>
-          <td style="padding:7px 10px;font-weight:700;white-space:nowrap;font-size:15px">${result.prize}</td>
+          <td style="padding:7px 10px;white-space:nowrap;font-size:15px;color:#111">${recordNum}</td>
+          <td style="padding:7px 10px;white-space:nowrap;font-size:15px;color:#111">${typeDisplay}</td>
+          <td style="padding:7px 10px;white-space:nowrap;font-size:15px;color:#111">${result.bet}</td>
+          <td style="padding:7px 10px;font-weight:700;white-space:nowrap;font-size:15px;color:#111">${result.prize}</td>
         </tr>
       `;
     }
@@ -2526,14 +2526,12 @@ async function checkWinning() {
   const outputDiv = document.getElementById('output7');
   outputDiv.innerHTML = htmlOutput;
 
-  // 如果有中奖结果，显示卡片区域并保存结果
+  // 如果有中奖结果，自动生成卡片
   if (winningResults.length > 0) {
     document.getElementById('cardSection').style.display = 'block';
     window._lastWinningResults = winningResults;
-    // 隐藏之前的卡片预览
-    document.getElementById('cardPreview').style.display = 'none';
-    document.getElementById('shareWaBtn').style.display = 'none';
-    document.getElementById('downloadBtn').style.display = 'none';
+    // 自动触发卡片生成
+    setTimeout(() => generateCard(), 100);
   } else {
     document.getElementById('cardSection').style.display = 'none';
   }
@@ -2557,12 +2555,12 @@ async function generateCard() {
     const recordNum = r.record.includes('-') ? r.record.split('-').pop() : r.record;
     return `
       <tr>
-        <td style="padding:10px 16px;color:#333;font-size:15px;white-space:nowrap">${r.date}</td>
-        <td style="padding:10px 16px;color:#00a87a;font-weight:700;font-size:15px;white-space:nowrap">${r.doc}</td>
-        <td style="padding:10px 16px;color:#333;font-size:15px;white-space:nowrap">${recordNum}</td>
-        <td style="padding:10px 16px;color:#333;font-size:15px;white-space:nowrap">${typeStr}</td>
-        <td style="padding:10px 16px;color:#333;font-size:15px;white-space:nowrap">${r.bet}</td>
-        <td style="padding:10px 16px;color:#333;font-weight:700;font-size:15px;white-space:nowrap">${r.prize}</td>
+        <td style="padding:7px 12px;color:#111;font-size:16px;white-space:nowrap">${r.date}</td>
+        <td style="padding:7px 12px;color:#00a87a;font-weight:700;font-size:16px;white-space:nowrap">${r.doc}</td>
+        <td style="padding:7px 12px;color:#111;font-size:16px;white-space:nowrap">${recordNum}</td>
+        <td style="padding:7px 12px;color:#111;font-size:16px;white-space:nowrap">${typeStr}</td>
+        <td style="padding:7px 12px;color:#111;font-size:16px;white-space:nowrap">${r.bet}</td>
+        <td style="padding:7px 12px;color:#111;font-weight:700;font-size:16px;white-space:nowrap">${r.prize}</td>
       </tr>
     `;
   }).join('');
@@ -2572,12 +2570,12 @@ async function generateCard() {
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="background:#f5f5f5">
-            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Date</th>
-            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Doc</th>
-            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Record</th>
-            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Type</th>
-            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Bet</th>
-            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Amt</th>
+            <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Date</th>
+            <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Doc</th>
+            <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Record</th>
+            <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Type</th>
+            <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Bet</th>
+            <th style="padding:10px 12px;text-align:left;font-size:16px;font-weight:700;color:#111;white-space:nowrap">Amt</th>
           </tr>
           <tr><td colspan="6" style="padding:0;border-bottom:2px solid #ddd;height:2px"></td></tr>
         </thead>
@@ -2618,7 +2616,7 @@ function downloadCard() {
   a.click();
 }
 
-// WhatsApp 分享图片
+// WhatsApp 分享图片（无文字，只发图片）
 async function shareCardToWhatsApp() {
   if (!window._cardCanvas) return;
 
@@ -2626,26 +2624,21 @@ async function shareCardToWhatsApp() {
   if (navigator.share && navigator.canShare) {
     try {
       window._cardCanvas.toBlob(async (blob) => {
-        const file = new File([blob], '中奖结果.png', { type: 'image/png' });
+        const file = new File([blob], 'result.png', { type: 'image/png' });
         if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: '中奖结果',
-            text: '🎉 中奖通知'
-          });
+          await navigator.share({ files: [file] });
         } else {
-          // 无法分享文件，改为下载
           downloadCard();
-          showToast('请下载图片后手动分享到 WhatsApp');
+          showToast('请下载图片后手动发送到 WhatsApp');
         }
       });
       return;
     } catch(e) {
-      // 用户取消分享，不报错
+      // 用户取消，不报错
     }
   }
 
-  // 桌面端：下载图片提示
+  // 桌面端：下载
   downloadCard();
   showToast('图片已下载，请手动发送到 WhatsApp');
 }
