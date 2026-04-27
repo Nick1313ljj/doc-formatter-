@@ -2480,37 +2480,41 @@ async function checkWinning() {
   } else {
     const levelMap = { '1': '1st', '2': '2nd', '3': '3rd', 'S': 'S', 'C': 'C' };
 
-    // 横向滚动容器，防止手机端文字竖排
+    // ① 日期升序排列（从小到大）
+    winningResults.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
     htmlOutput = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      <table style="border-collapse:collapse;font-size:14px;background:#fff;min-width:600px;width:100%">
+      <table style="border-collapse:collapse;font-size:15px;background:#fff;min-width:480px;width:100%">
         <thead>
-          <tr style="background:#f5f5f5;border-bottom:2px solid #ddd">
-            <th style="padding:14px 16px;text-align:left;font-weight:700;white-space:nowrap">Date</th>
-            <th style="padding:14px 16px;text-align:left;font-weight:700;white-space:nowrap">Doc</th>
-            <th style="padding:14px 16px;text-align:left;font-weight:700;white-space:nowrap">Record</th>
-            <th style="padding:14px 16px;text-align:left;font-weight:700;white-space:nowrap">Type</th>
-            <th style="padding:14px 16px;text-align:left;font-weight:700;white-space:nowrap">Bet</th>
-            <th style="padding:14px 16px;text-align:left;font-weight:700;white-space:nowrap">Amt</th>
+          <tr style="background:#f5f5f5">
+            <th style="padding:8px 10px;text-align:left;font-weight:700;white-space:nowrap;font-size:15px">Date</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:700;white-space:nowrap;font-size:15px">Doc</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:700;white-space:nowrap;font-size:15px">Record</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:700;white-space:nowrap;font-size:15px">Type</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:700;white-space:nowrap;font-size:15px">Bet</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:700;white-space:nowrap;font-size:15px">Amt</th>
           </tr>
-          <tr><td colspan="6" style="padding:0;border-bottom:1px solid #ddd"></td></tr>
+          <tr><td colspan="6" style="padding:0;border-bottom:2px solid #ddd"></td></tr>
         </thead>
         <tbody>
     `;
 
     for (let result of winningResults) {
       const levelStr = levelMap[result.level] || result.level;
-      const typeDisplay = `${levelStr} ${result.company} ${result.typeStr}`;
-      // Record 只显示号码部分（去掉 doc 前缀）
+      // ④ Type 格式：公司 - 奖级 - Box/IBox（正字不显示）
+      const boxStr = result.isBox ? ' - IBox' : (result.typeStr === 'IBOX' ? ' - IBox' : '');
+      const typeDisplay = `${result.company} - ${levelStr}${boxStr}`;
+      // Record 只显示号码
       const recordNum = result.record.includes('-') ? result.record.split('-').pop() : result.record;
 
       htmlOutput += `
         <tr style="border-bottom:1px solid #eee">
-          <td style="padding:14px 16px;white-space:nowrap">${result.date}</td>
-          <td style="padding:14px 16px;color:var(--accent);font-weight:700;white-space:nowrap">${result.doc}</td>
-          <td style="padding:14px 16px;white-space:nowrap">${recordNum}</td>
-          <td style="padding:14px 16px;white-space:nowrap">${typeDisplay}</td>
-          <td style="padding:14px 16px;white-space:nowrap">${result.bet}</td>
-          <td style="padding:14px 16px;font-weight:700;white-space:nowrap">${result.prize}</td>
+          <td style="padding:7px 10px;white-space:nowrap;font-size:15px">${result.date}</td>
+          <td style="padding:7px 10px;color:var(--accent);font-weight:700;white-space:nowrap;font-size:15px">${result.doc}</td>
+          <td style="padding:7px 10px;white-space:nowrap;font-size:15px">${recordNum}</td>
+          <td style="padding:7px 10px;white-space:nowrap;font-size:15px">${typeDisplay}</td>
+          <td style="padding:7px 10px;white-space:nowrap;font-size:15px">${result.bet}</td>
+          <td style="padding:7px 10px;font-weight:700;white-space:nowrap;font-size:15px">${result.prize}</td>
         </tr>
       `;
     }
@@ -2542,33 +2546,38 @@ async function generateCard() {
 
   const levelMap = { '1': '1st', '2': '2nd', '3': '3rd', 'S': 'S', 'C': 'C' };
 
+  // 日期升序排列
+  results.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
   // 构建卡片 HTML
   let rows = results.map(r => {
-    const typeStr = `${levelMap[r.level]||r.level} ${r.company} ${r.typeStr}`;
+    const levelStr = levelMap[r.level] || r.level;
+    const boxStr = r.isBox ? ' - IBox' : '';
+    const typeStr = `${r.company} - ${levelStr}${boxStr}`;
     const recordNum = r.record.includes('-') ? r.record.split('-').pop() : r.record;
     return `
       <tr>
-        <td style="padding:14px 24px;color:#333;font-size:14px;white-space:nowrap">${r.date}</td>
-        <td style="padding:14px 24px;color:#00a87a;font-weight:700;font-size:14px;white-space:nowrap">${r.doc}</td>
-        <td style="padding:14px 24px;color:#333;font-size:14px;white-space:nowrap">${recordNum}</td>
-        <td style="padding:14px 24px;color:#333;font-size:14px;white-space:nowrap">${typeStr}</td>
-        <td style="padding:14px 24px;color:#333;font-size:14px;white-space:nowrap">${r.bet}</td>
-        <td style="padding:14px 24px;color:#333;font-weight:700;font-size:14px;white-space:nowrap">${r.prize}</td>
+        <td style="padding:10px 16px;color:#333;font-size:15px;white-space:nowrap">${r.date}</td>
+        <td style="padding:10px 16px;color:#00a87a;font-weight:700;font-size:15px;white-space:nowrap">${r.doc}</td>
+        <td style="padding:10px 16px;color:#333;font-size:15px;white-space:nowrap">${recordNum}</td>
+        <td style="padding:10px 16px;color:#333;font-size:15px;white-space:nowrap">${typeStr}</td>
+        <td style="padding:10px 16px;color:#333;font-size:15px;white-space:nowrap">${r.bet}</td>
+        <td style="padding:10px 16px;color:#333;font-weight:700;font-size:15px;white-space:nowrap">${r.prize}</td>
       </tr>
     `;
   }).join('');
 
   const cardHtml = `
-    <div style="background:#fff;padding:0;font-family:Arial,sans-serif;width:760px">
+    <div style="background:#fff;padding:0;font-family:Arial,sans-serif;width:720px">
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="background:#f5f5f5">
-            <th style="padding:16px 24px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Date</th>
-            <th style="padding:16px 24px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Doc</th>
-            <th style="padding:16px 24px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Record</th>
-            <th style="padding:16px 24px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Type</th>
-            <th style="padding:16px 24px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Bet</th>
-            <th style="padding:16px 24px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Amt</th>
+            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Date</th>
+            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Doc</th>
+            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Record</th>
+            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Type</th>
+            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Bet</th>
+            <th style="padding:12px 16px;text-align:left;font-size:15px;font-weight:700;color:#333;white-space:nowrap">Amt</th>
           </tr>
           <tr><td colspan="6" style="padding:0;border-bottom:2px solid #ddd;height:2px"></td></tr>
         </thead>
