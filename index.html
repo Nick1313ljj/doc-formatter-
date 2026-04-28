@@ -2280,18 +2280,42 @@ function extractCompanies(marker) {
 function parseTicketBlock(block) {
   const tickets = [];
 
-  // 提取日期 YY.MM.DD → 2026-04-24
+  // 提取日期，支持多种格式：
+  // 格式1: YY.MM.DD (如 26.04.24)
+  // 格式2: {MMDD} (如 {0427} = 2026-04-27)
+  // 格式3: DD/MM (如 24/04)
   let blockDate = '';
-  const dateMatch = block.match(/(\d{2})\.(\d{2})\.(\d{2})/);
-  if (dateMatch) {
-    const [, yy, mm, dd] = dateMatch;
+  const d1 = block.match(/(\d{2})\.(\d{2})\.(\d{2})/);
+  if (d1) {
+    const [, yy, mm, dd] = d1;
     blockDate = `20${yy}-${mm}-${dd}`;
+  } else {
+    const d2 = block.match(/\{(\d{2})(\d{2})\}/);
+    if (d2) {
+      const [, mm, dd] = d2;
+      const year = new Date().getFullYear();
+      blockDate = `${year}-${mm}-${dd}`;
+    } else {
+      const d3 = block.match(/(\d{2})\/(\d{2})/);
+      if (d3) {
+        const [, dd, mm] = d3;
+        const year = new Date().getFullYear();
+        blockDate = `${year}-${mm}-${dd}`;
+      }
+    }
   }
 
-  // 提取单号：括号内5位以上数字
+  // 提取单号：
+  // 格式1: (69057) 括号内5位以上
+  // 格式2: 990427131508(V4) 括号外的长数字（8位以上，后接括号或行尾）
   let blockDoc = '';
-  const docMatch = block.match(/\((\d{5,})\)/);
-  if (docMatch) blockDoc = docMatch[1];
+  const doc1 = block.match(/\((\d{5,})\)/);
+  if (doc1) {
+    blockDoc = doc1[1];
+  } else {
+    const doc2 = block.match(/\b(\d{8,})\b/);
+    if (doc2) blockDoc = doc2[1];
+  }
 
   // 找出已售罄号码
   const soldOutNumbers = new Set();
@@ -2340,10 +2364,13 @@ function parseTicketBlock(block) {
 
     let big = 0, small = 0, a1 = 0;
     for (let part of betStr.split(/\s+/)) {
-      const m = part.match(/^([\d.]+)([A-Z]+)$/i);
+      // 支持两种格式：数字在前(5B) 或 字母在前(B5)
+      const m = part.match(/^([A-Z]+)([\d.]+)$/i) || part.match(/^([\d.]+)([A-Z]+)$/i);
       if (m) {
-        const amt = parseFloat(m[1]);
-        const t = m[2].toUpperCase();
+        // 判断哪个是字母哪个是数字
+        const isLetterFirst = /^[A-Z]/i.test(part);
+        const t = isLetterFirst ? m[1].toUpperCase() : m[2].toUpperCase();
+        const amt = isLetterFirst ? parseFloat(m[2]) : parseFloat(m[1]);
         if (t === 'B') big = amt;
         else if (t === 'S') small = amt;
         else if (t === 'A1') a1 = amt;
