@@ -2310,9 +2310,9 @@ function parseTicketBlock(block) {
 
     // 星号标记：*HELN, *LN, *MPTSHEN, *HEN 等
     if (line.startsWith('*')) {
-      const cos = extractCompanies(line.substring(1));
-      if (cos.length > 0) { currentCompanies = cos; continue; }
-      // 即使没有L/N（如*H单独），不重置 currentCompanies
+      // 无论有没有 L/N，都更新 currentCompanies
+      // *H → [] → 此区块号码不参与配对
+      currentCompanies = extractCompanies(line.substring(1));
       continue;
     }
 
