@@ -2574,11 +2574,10 @@ async function checkWinning() {
 
     for (let result of winningResults) {
       const levelStr = levelMap[result.level] || result.level;
-      // ④ Type 格式：公司 - 奖级 - Box/IBox（正字不显示）
-      const boxStr = result.isBox ? ' - IBox' : (result.typeStr === 'IBOX' ? ' - IBox' : '');
+      const boxStr = result.typeStr === 'IBox' ? ' - IBox' : (result.typeStr === 'Box' ? ' - Box' : '');
       const typeDisplay = `${result.company} - ${levelStr}${boxStr}`;
-      // Record 只显示号码
-      const recordNum = result.record.includes('-') ? result.record.split('-').pop() : result.record;
+      // Record 显示开彩号码（winningNum），不是票根号码
+      const recordNum = result.winningNum;
 
       htmlOutput += `
         <tr style="border-bottom:1px solid #ddd">
@@ -2626,9 +2625,10 @@ async function generateCard() {
   // 构建卡片 HTML（隔行条纹）
   let rows = results.map((r, i) => {
     const levelStr = levelMap[r.level] || r.level;
-    const boxStr = r.isBox ? ' - IBox' : '';
+    const boxStr = r.typeStr === 'IBox' ? ' - IBox' : (r.typeStr === 'Box' ? ' - Box' : '');
     const typeStr = `${r.company} - ${levelStr}${boxStr}`;
-    const recordNum = r.record.includes('-') ? r.record.split('-').pop() : r.record;
+    // 始终用开彩号码（winningNum）
+    const recordNum = r.winningNum;
     const bg = i % 2 === 0 ? '#ffffff' : '#f7f9f7';
     return `
       <tr style="background:${bg}">
