@@ -2265,111 +2265,127 @@ function parseLotteryData(text) {
   return result;
 }
 
-// 解析票根数据 - 支持多彩票公司，按 WhatsApp 消息分块
-function parseTicketData(text) {
+// 辅助：从标记字符串提取彩票公司列表（L3/N3/L/N）
+function extractCompanies(marker) {
+  const m = marker.toUpperCase();
+  const result = [];
+  if (m.includes('L3')) result.push('L3');
+  else if (m.includes('L')) result.push('L');
+  if (m.includes('N3')) result.push('N3');
+  else if (m.includes('N')) result.push('N');
+  return result;
+}
+
+// 解析单个票根块，返回 tickets 数组
+function parseTicketBlock(block) {
   const tickets = [];
 
-  // 按 WhatsApp 消息块分割（每个 "[日期, 时间] 发送人:" 为一块）
-  // 支持 "[4/19, 4:10 PM] 太子 TaisonHp2: (TT)" 格式
-  const blocks = text.split(/(?=\[\d+\/\d+,\s*\d+:\d+\s*[AP]M\])/i);
+  // 提取日期 YY.MM.DD → 2026-04-24
+  let blockDate = '';
+  const dateMatch = block.match(/(\d{2})\.(\d{2})\.(\d{2})/);
+  if (dateMatch) {
+    const [, yy, mm, dd] = dateMatch;
+    blockDate = `20${yy}-${mm}-${dd}`;
+  }
 
+  // 提取单号：括号内5位以上数字
+  let blockDoc = '';
+  const docMatch = block.match(/\((\d{5,})\)/);
+  if (docMatch) blockDoc = docMatch[1];
+
+  // 找出已售罄号码
+  const soldOutNumbers = new Set();
+  const lines = block.split('\n');
+  for (let line of lines) {
+    if (line.includes('(S.O)')) {
+      const m = line.match(/(\d{4})/);
+      if (m) soldOutNumbers.add(m[1]);
+    }
+  }
+
+  let currentCompanies = [];
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+
+    // 星号标记：*HELN, *LN, *MPTSHEN, *HEN 等
+    if (line.startsWith('*')) {
+      const cos = extractCompanies(line.substring(1));
+      if (cos.length > 0) { currentCompanies = cos; continue; }
+      // 即使没有L/N（如*H单独），不重置 currentCompanies
+      continue;
+    }
+
+    // 括号标记：(L3N3), (LN), (L), (N3) 等
+    if (/^\([A-Z0-9]+\)$/.test(line)) {
+      const inner = line.slice(1, -1);
+      const cos = extractCompanies(inner);
+      if (cos.length > 0) { currentCompanies = cos; continue; }
+    }
+
+    // 只处理投注行（必须以4位数字开头后接 =）
+    if (!/^\d{4}=/.test(line)) continue;
+    if (currentCompanies.length === 0) continue;
+
+    const betMatch = line.match(/^(\d{4})=(.+?)(?:\s+\((Box|IBox|iBox)\))?$/i);
+    if (!betMatch) continue;
+
+    const number = betMatch[1];
+    if (soldOutNumbers.has(number)) continue;
+
+    const betStr = betMatch[2].trim();
+    const boxType = betMatch[3] ? betMatch[3].toUpperCase() : null;
+    const isBox = boxType === 'IBOX' || boxType === 'BOX';
+    const isIBox = boxType === 'IBOX';
+
+    let big = 0, small = 0, a1 = 0;
+    for (let part of betStr.split(/\s+/)) {
+      const m = part.match(/^([\d.]+)([A-Z]+)$/i);
+      if (m) {
+        const amt = parseFloat(m[1]);
+        const t = m[2].toUpperCase();
+        if (t === 'B') big = amt;
+        else if (t === 'S') small = amt;
+        else if (t === 'A1') a1 = amt;
+      }
+    }
+
+    if (big || small || a1) {
+      for (let company of currentCompanies) {
+        tickets.push({
+          number, big, small, a1, isBox, isIBox, company,
+          date: blockDate,
+          doc: blockDoc,
+          record: `${blockDoc}-${number}`
+        });
+      }
+    }
+  }
+
+  return tickets;
+}
+
+// 解析票根数据 - 支持多种分块格式
+function parseTicketData(text) {
+  let blocks = [];
+
+  // 优先按 WhatsApp 时间戳分块：[4/19, 4:10 PM] 发送人:
+  if (/\[\d+\/\d+,\s*\d+:\d+\s*[AP]M\]/i.test(text)) {
+    blocks = text.split(/(?=\[\d+\/\d+,\s*\d+:\d+\s*[AP]M\])/i);
+  }
+  // 其次按 (TT) 分块
+  else if (/^\(TT\)/im.test(text)) {
+    blocks = text.split(/(?=^\(TT\))/im);
+  }
+  // 最后整体作为一块
+  else {
+    blocks = [text];
+  }
+
+  const tickets = [];
   for (let block of blocks) {
-    if (!block.trim()) continue;
-
-    // 提取日期：格式 YY.MM.DD（如 26.04.19 = 2026-04-19）
-    let blockDate = '';
-    const dateMatch = block.match(/(\d{2})\.(\d{2})\.(\d{2})/);
-    if (dateMatch) {
-      const [, yy, mm, dd] = dateMatch;
-      blockDate = `20${yy}-${mm}-${dd}`;
-    }
-
-    // 提取单号：(64422) 格式（5位以上数字）
-    let blockDoc = '';
-    const docMatch = block.match(/\((\d{5,})\)/);
-    if (docMatch) blockDoc = docMatch[1];
-
-    // 找出已售罄号码
-    const soldOutNumbers = new Set();
-    const lines = block.split('\n');
-    for (let line of lines) {
-      if (line.includes('(S.O)')) {
-        const m = line.match(/(\d{4})/);
-        if (m) soldOutNumbers.add(m[1]);
-      }
-    }
-
-    // 辅助：从标记字符串提取公司列表
-    function extractCompanies(marker) {
-      const m = marker.toUpperCase();
-      const result = [];
-      if (m.includes('L3')) result.push('L3');
-      else if (m.includes('L')) result.push('L');
-      if (m.includes('N3')) result.push('N3');
-      else if (m.includes('N')) result.push('N');
-      return result;
-    }
-
-    // 解析投注行
-    let currentCompanies = [];
-    for (let line of lines) {
-      line = line.trim();
-      if (!line) continue;
-
-      // 格式1：星号标记 *HELN, *LN, *BKWHELN 等
-      if (line.startsWith('*')) {
-        const cos = extractCompanies(line.substring(1));
-        if (cos.length > 0) { currentCompanies = cos; continue; }
-      }
-
-      // 格式2：括号标记 (L3N3), (LN), (L), (N3) 等
-      // 必须是单独一行，且内容只有字母数字
-      if (/^\([A-Z0-9]+\)$/.test(line)) {
-        const inner = line.slice(1, -1);
-        const cos = extractCompanies(inner);
-        if (cos.length > 0) { currentCompanies = cos; continue; }
-      }
-
-      // 跳过非投注行（GT=, 3n18, {0427} 等）
-      if (!line.match(/^\d{4}=/)) continue;
-      if (currentCompanies.length === 0) continue;
-
-      // 投注行：1717=1B 或 1717=2B 2S 2A1 或 1717=1B (IBox) 或 1717=1B (Box)
-      const betMatch = line.match(/^(\d{4})=(.+?)(?:\s+\((Box|IBox|iBox)\))?$/i);
-      if (!betMatch) continue;
-
-      const number = betMatch[1];
-      if (soldOutNumbers.has(number)) continue;
-
-      const betStr = betMatch[2].trim();
-      const boxType = betMatch[3] ? betMatch[3].toUpperCase() : null;
-      const isBox = boxType === 'IBOX' || boxType === 'BOX';
-
-      let big = 0, small = 0, a1 = 0;
-      for (let part of betStr.split(/\s+/)) {
-        const m = part.match(/^([\d.]+)([A-Z]+)$/i);
-        if (m) {
-          const amt = parseFloat(m[1]);
-          const t = m[2].toUpperCase();
-          if (t === 'B') big = amt;
-          else if (t === 'S') small = amt;
-          else if (t === 'A1') a1 = amt;
-        }
-      }
-
-      if (big || small || a1) {
-        for (let company of currentCompanies) {
-          tickets.push({
-            number, big, small, a1,
-            isBox,                        // true = Box 或 IBox
-            isIBox: boxType === 'IBOX',   // 只有 IBox 才 ÷ 排列数
-            company,
-            date: blockDate,
-            doc: blockDoc,
-            record: `${blockDoc}-${number}`
-          });
-        }
-      }
+    if (block.trim()) {
+      tickets.push(...parseTicketBlock(block));
     }
   }
 
