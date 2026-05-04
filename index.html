@@ -1806,15 +1806,19 @@ async function printOutput5() {
 // ESC/POS: send text in chunks (BLE MTU ~20 bytes)
 async function sendEscPos(char, text) {
   const encoder = new TextEncoder();
-  // ESC @ = initialize, then text lines, then 4 line feeds to advance paper
+  // ESC @ = initialize printer
   const init = new Uint8Array([0x1B, 0x40]);
-  const feed = new Uint8Array([0x1B, 0x64, 0x04]); // ESC d 4
+  // GS ! 0x11 = double width + double height (2x font size)
+  const bigFont = new Uint8Array([0x1D, 0x21, 0x11]);
+  // ESC d 4 = feed 4 lines
+  const feed = new Uint8Array([0x1B, 0x64, 0x04]);
 
   const textBytes = encoder.encode(text + '\n');
-  const full = new Uint8Array(init.length + textBytes.length + feed.length);
+  const full = new Uint8Array(init.length + bigFont.length + textBytes.length + feed.length);
   full.set(init, 0);
-  full.set(textBytes, init.length);
-  full.set(feed, init.length + textBytes.length);
+  full.set(bigFont, init.length);
+  full.set(textBytes, init.length + bigFont.length);
+  full.set(feed, init.length + bigFont.length + textBytes.length);
 
   // Send in 20-byte chunks
   const CHUNK = 20;
