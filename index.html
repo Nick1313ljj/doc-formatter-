@@ -1808,8 +1808,8 @@ async function sendEscPos(char, text) {
   const encoder = new TextEncoder();
   // ESC @ = initialize printer
   const init = new Uint8Array([0x1B, 0x40]);
-  // GS ! 0x11 = double width + double height (2x font size)
-  const bigFont = new Uint8Array([0x1D, 0x21, 0x11]);
+  // GS ! 0x10 = double height only (1.5x effect, narrower than full double)
+  const bigFont = new Uint8Array([0x1D, 0x21, 0x10]);
   // ESC d 4 = feed 4 lines
   const feed = new Uint8Array([0x1B, 0x64, 0x04]);
 
