@@ -323,7 +323,9 @@
       <div class="output" id="output5">—</div>
       <button class="copy-btn" onclick="copyOutput(5)">复制</button>
     </div>
-    <div style="margin-top:10px;display:flex;justify-content:flex-end">
+    <div style="margin-top:10px;display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn" onclick="shareWA5()"
+        style="background:#25D366;color:#fff;font-size:11px;padding:8px 18px">📱 WhatsApp</button>
       <button class="btn" onclick="printOutput5()"
         style="background:var(--purple);color:#fff;font-size:11px;padding:8px 18px">🖨 打印</button>
     </div>
@@ -1721,6 +1723,16 @@ function processL3N3(raw) {
   }
 
   return out.join('\n');
+}
+
+async function shareWA5() {
+  const text = document.getElementById('output5').textContent;
+  if (!text || text === '—') { showToast('没有内容可分享'); return; }
+  if (navigator.share) {
+    try { await navigator.share({ text }); return; } catch(e) {}
+  }
+  // 桌面端 fallback：打开 wa.me
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
 }
 
 async function printOutput5() {
