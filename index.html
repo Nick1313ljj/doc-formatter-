@@ -301,6 +301,10 @@
   <div class="section">
     <div class="sec-label">输出结果</div>
     <div id="output4container"><div class="output">—</div></div>
+    <div style="margin-top:10px;display:flex;justify-content:flex-end">
+      <button class="btn" onclick="shareWA4()"
+        style="background:#25D366;color:#fff;font-size:11px;padding:8px 18px">📱 WhatsApp</button>
+    </div>
   </div>
 </div>
 
@@ -1723,6 +1727,17 @@ function processL3N3(raw) {
   }
 
   return out.join('\n');
+}
+
+async function shareWA4() {
+  // 收集所有 output card 的文字
+  const cards = document.querySelectorAll('#output4container .output');
+  const text = [...cards].map(c => c.textContent).filter(t => t && t !== '—').join('\n\n');
+  if (!text) { showToast('没有内容可分享'); return; }
+  if (navigator.share) {
+    try { await navigator.share({ text }); return; } catch(e) {}
+  }
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
 }
 
 async function shareWA5() {
