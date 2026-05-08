@@ -1494,8 +1494,8 @@ function processSaraBlock(raw, available) {
     if (/^RM\d/i.test(line)) continue;
     if (/^\d+\+\d/.test(line)) continue;
 
-    // Company code line
-    const compMatch = line.match(/^\*?([A-Za-z]+)$/);
+    // Company code line (also handle parenthesised markers like (LN), (L), (N))
+    const compMatch = line.match(/^\*?([A-Za-z]+)$/) || line.match(/^\(([A-Za-z]+)\)$/);
     if (compMatch) {
       const letters = compMatch[1].toUpperCase().split('');
       if (letters.every(l => SARA_LETTERS.has(l))) {
