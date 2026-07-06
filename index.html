@@ -198,6 +198,7 @@
     <div class="btn-row" style="margin-bottom:10px">
       <button class="btn btn-go" style="background:var(--blue)" onclick="document.getElementById('imgCamera').click()">📷 拍照</button>
       <button class="hbtn" onclick="document.getElementById('imgInput').click()">🖼 从相册选择</button>
+      <button class="hbtn blue" onclick="pasteImage()">📋 粘贴图片</button>
     </div>
     <input type="file" id="imgCamera" accept="image/*" capture="environment" onchange="onImageSelected(event)" style="display:none">
     <input type="file" id="imgInput" accept="image/*" onchange="onImageSelected(event)" style="display:none">
@@ -857,6 +858,24 @@ function clearPanel0() {
   document.getElementById('uploadLabel').textContent = '📷 点击上传图片 或 长按粘贴';
   document.getElementById('uploadArea').classList.remove('has-image');
   document.getElementById('output0').textContent = '—';
+}
+
+async function pasteImage() {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imageType = item.types.find(t => t.startsWith('image/'));
+      if (imageType) {
+        const blob = await item.getType(imageType);
+        const file = new File([blob], 'pasted.png', { type: imageType });
+        onImageSelected({ target: { files: [file] } });
+        return;
+      }
+    }
+    showToast('剪贴板中没有图片');
+  } catch(e) {
+    showToast('请允许访问剪贴板权限后重试');
+  }
 }
 
 // ════════════════════════════════
