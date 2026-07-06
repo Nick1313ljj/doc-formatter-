@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>单据排版工具 v16</title>
+<title>单据排版工具 v17</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
@@ -136,17 +136,24 @@
 <div class="header">
   <div class="badge">单据排版系统</div>
   <h1>单据 <em>排版工具</em></h1>
-  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v16</p>
+  <p class="desc">多格式单据转换 · 本地处理 · 无需登录 · v17 · 支持42model本地OCR</p>
 </div>
 
 <!-- API Key (only shown for Format 1) -->
 <div class="api-section" id="apiSection">
   <!-- Engine selector -->
   <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+    <button id="engine42model" class="hbtn" onclick="selectEngine('42model')"
+      style="color:#00a87a;border-color:#00a87a;background:#e6f7f3">🖥 42model 本地</button>
     <button id="engineClaude" class="hbtn" onclick="selectEngine('claude')">Claude Haiku</button>
     <button id="engineGemini" class="hbtn" onclick="selectEngine('gemini')">Gemini</button>
     <button id="engineDoubao" class="hbtn" onclick="selectEngine('doubao')"
       style="color:#e65c00;border-color:#e65c00;background:#fff3ec">豆包视觉</button>
+  </div>
+  <!-- 42model local row -->
+  <div class="api-row" id="42modelRow" style="display:none">
+    <span class="api-label" style="color:#00a87a">✓ 本地运行 · 免费 · 无需 API Key</span>
+    <button class="hbtn" onclick="test42modelAPI()" style="color:#00a87a;border-color:#00a87a">测试连接</button>
   </div>
   <!-- Claude key row -->
   <div class="api-row" id="claudeRow" style="display:none">
@@ -490,19 +497,23 @@ function switchTab(i) {
 // ════════════════════════════════
 // API KEY
 // ════════════════════════════════
-let currentEngine = 'doubao';
+let currentEngine = '42model';
 
 function selectEngine(engine) {
   currentEngine = engine;
+  document.getElementById('42modelRow').style.display = engine === '42model' ? 'flex' : 'none';
   document.getElementById('claudeRow').style.display  = engine === 'claude'  ? 'flex' : 'none';
   document.getElementById('geminiRow').style.display  = engine === 'gemini'  ? 'flex' : 'none';
   document.getElementById('doubaoRow').style.display  = engine === 'doubao'  ? 'flex' : 'none';
+  const lBtn = document.getElementById('engine42model');
   const cBtn = document.getElementById('engineClaude');
   const gBtn = document.getElementById('engineGemini');
   const dBtn = document.getElementById('engineDoubao');
+  lBtn.style.cssText = '';
   cBtn.style.cssText = '';
   gBtn.style.cssText = '';
   dBtn.style.cssText = '';
+  if (engine === '42model') lBtn.style.cssText = 'color:#00a87a;border-color:#00a87a;background:#e6f7f3;font-weight:bold';
   if (engine === 'claude')  cBtn.style.cssText = 'color:var(--accent);border-color:var(--accent);background:var(--accent-dim)';
   if (engine === 'gemini')  gBtn.style.cssText = 'color:var(--blue);border-color:var(--blue);background:var(--blue-dim)';
   if (engine === 'doubao')  dBtn.style.cssText = 'color:#e65c00;border-color:#e65c00;background:#fff3ec';
@@ -532,6 +543,8 @@ function loadApiKey() {
   if (gm) document.getElementById('geminiKey').value = gm;
   const db = localStorage.getItem('doubao_api_key');
   if (db) document.getElementById('doubaoKey').value = db;
+  // 默认选择42model本地引擎
+  selectEngine('42model');
 }
 
 function toggleApiVis(id, btn) {
@@ -732,11 +745,65 @@ function onImageSelected(e) {
   reader.readAsDataURL(file);
 }
 
+async function test42modelAPI() {
+  try {
+    const res = await fetch('http://localhost:11520/v1/models', {
+      headers: { 'Authorization': 'Bearer 42model' }
+    });
+    if (res.ok) {
+      showToast('✓ 42model 连接成功！');
+    } else {
+      showToast('❌ 连接失败，请确认 42model 引擎正在运行');
+    }
+  } catch(e) {
+    showToast('❌ 无法连接，请打开 42model 并启动引擎');
+  }
+}
+
+async function call42model(prompt, imageBase64) {
+  const messages = [{
+    role: 'user',
+    content: imageBase64
+      ? [
+          { type: 'image_url', image_url: { url: `data:${imageBase64.type};base64,${imageBase64.data}` } },
+          { type: 'text', text: prompt }
+        ]
+      : [{ type: 'text', text: prompt }]
+  }];
+
+  let res;
+  try {
+    res = await fetch('http://localhost:11520/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer 42model'
+      },
+      body: JSON.stringify({
+        model: 'glm-ocr:1b',
+        messages,
+        max_tokens: 2048
+      })
+    });
+  } catch(netErr) {
+    throw new Error('无法连接 42model，请确认引擎正在运行（活水模型 → 引擎 → 让活水奔流）');
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    throw new Error(err.error?.message || '42model 返回错误: ' + res.status);
+  }
+  const data = await res.json();
+  return data.choices[0].message.content;
+}
+
 async function runOCR() {
   if (!selectedImage) { showToast('请先上传图片'); return; }
-  const key = currentEngine === 'gemini' ? getGeminiKey() : currentEngine === 'doubao' ? getDoubaoKey() : getKey();
-  const engineName = currentEngine === 'gemini' ? 'Gemini' : currentEngine === 'doubao' ? '豆包' : 'Claude';
-  if (!key) { showToast(`请先输入 ${engineName} API Key`); return; }
+
+  if (currentEngine !== '42model') {
+    const key = currentEngine === 'gemini' ? getGeminiKey() : currentEngine === 'doubao' ? getDoubaoKey() : getKey();
+    const engineName = currentEngine === 'gemini' ? 'Gemini' : currentEngine === 'doubao' ? '豆包' : 'Claude';
+    if (!key) { showToast(`请先输入 ${engineName} API Key`); return; }
+  }
 
   const btn = document.getElementById('ocrBtn');
   const spinner = document.getElementById('ocrSpinner');
@@ -766,7 +833,9 @@ STRICT RULES:
 ONLY output the final extracted text.`;
 
   try {
-    const result = currentEngine === 'gemini'  ? await callGemini(key, prompt, selectedImage)
+    const key = currentEngine === 'gemini' ? getGeminiKey() : currentEngine === 'doubao' ? getDoubaoKey() : getKey();
+    const result = currentEngine === '42model' ? await call42model(prompt, selectedImage)
+                 : currentEngine === 'gemini'  ? await callGemini(key, prompt, selectedImage)
                  : currentEngine === 'doubao'  ? await callDoubao(key, prompt, selectedImage)
                  : await callClaude(key, prompt, selectedImage);
     document.getElementById('output0').textContent = result;
