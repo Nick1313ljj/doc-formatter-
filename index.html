@@ -142,14 +142,16 @@
 <!-- API Key (only shown for Format 1) -->
 <div class="api-section" id="apiSection">
   <!-- Engine selector -->
-  <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+  <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
     <button id="engine42model" class="hbtn" onclick="selectEngine('42model')"
       style="color:#00a87a;border-color:#00a87a;background:#e6f7f3">🖥 42model 本地</button>
     <button id="engineClaude" class="hbtn" onclick="selectEngine('claude')">Claude Haiku</button>
     <button id="engineGemini" class="hbtn" onclick="selectEngine('gemini')">Gemini</button>
     <button id="engineDoubao" class="hbtn" onclick="selectEngine('doubao')"
       style="color:#e65c00;border-color:#e65c00;background:#fff3ec">豆包视觉</button>
+    <button class="hbtn" onclick="saveDefaultEngine()" style="border-color:var(--warn);color:var(--warn)">⭐ 设为此设备默认</button>
   </div>
+  <div id="defaultEngineLabel" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px"></div>
   <!-- 42model local row -->
   <div class="api-row" id="42modelRow" style="display:none">
     <span class="api-label" style="color:#00a87a">✓ 本地运行 · 免费 · 无需 API Key</span>
@@ -544,8 +546,25 @@ function loadApiKey() {
   if (gm) document.getElementById('geminiKey').value = gm;
   const db = localStorage.getItem('doubao_api_key');
   if (db) document.getElementById('doubaoKey').value = db;
-  // 默认选择42model本地引擎
-  selectEngine('42model');
+  const def = localStorage.getItem('defaultEngine') || '42model';
+  selectEngine(def);
+  updateDefaultLabel();
+}
+
+function engineName(e) {
+  return { '42model': '42model 本地', 'claude': 'Claude Haiku', 'gemini': 'Gemini', 'doubao': '豆包视觉' }[e] || e;
+}
+
+function saveDefaultEngine() {
+  localStorage.setItem('defaultEngine', currentEngine);
+  updateDefaultLabel();
+  showToast('✓ 已设为此设备默认：' + engineName(currentEngine));
+}
+
+function updateDefaultLabel() {
+  const saved = localStorage.getItem('defaultEngine');
+  const el = document.getElementById('defaultEngineLabel');
+  if (el) el.textContent = saved ? '此设备默认：' + engineName(saved) : '';
 }
 
 function toggleApiVis(id, btn) {
